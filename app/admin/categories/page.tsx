@@ -1,11 +1,17 @@
 
 
+import CategoryTable from "@/modules/categories/components/admin/CategoryTable"
+import AddCategoryForm from "@/modules/categories/components/admin/AddCategoryForm"
 
-
-const categories = () => {
+const CategoriesPage = () => {
   return (
-    <div>welcome to categories page</div>
+    <div className="p-6">
+   
+      <CategoryTable />
+      
+      
+    </div>
   )
 }
 
-export default categories
+export default CategoriesPage
