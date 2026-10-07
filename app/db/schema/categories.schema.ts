@@ -160,7 +160,7 @@ export const fieldType = pgEnum('field_type', [
 
 export const categories = pgTable('categories', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull(),
+  name: text('name').notNull().unique(),
   slug: text('slug').notNull().unique(),
   icon: text('icon'), // lucide icon ka naam ya image url
   parentId: integer('parent_id').references((): AnyPgColumn => categories.id, {

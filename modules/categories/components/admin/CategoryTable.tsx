@@ -103,12 +103,17 @@ const CategoryTable = () => {
               Add Category +
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+
+          {/* content of dialog  */}
+          <DialogContent className="sm:max-w-md ">
             <DialogHeader>
               <DialogTitle>Add New Category</DialogTitle>
             </DialogHeader>
-            <CategoryForm />
+            <CategoryForm onSuccess = {() => setOpen(false)}/>
+
           </DialogContent>
+
+
         </Dialog>
       </div>
 

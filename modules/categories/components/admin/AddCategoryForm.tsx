@@ -1,4 +1,10 @@
+"use client"
+
 import { Input } from "@/components/ui/input"
+import { useActionState } from "react"
+import { toast } from "sonner"
+
+
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import {
@@ -9,33 +15,117 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-const CategoryForm = () => {
+import { addcategory } from "../../actions"
+import { useState } from "react"
+import { useEffect } from "react"
+
+interface CategoryFormProps {
+  onSuccess?: () => void;
+}
+
+const CategoryForm = ({ onSuccess }: CategoryFormProps) => {
+
+
+
+
+  const [state, formAction, isPending] = useActionState(addcategory, null);
+
+
+useEffect(() => {
+    if (state?.success) {
+      // 1. Pyara sa success toast dikhayein
+      toast.success(state.message || "Category added successfully!");
+      
+      // 2. Modal close kar dein
+      onSuccess?.();
+    } else if (state?.message && !state?.success) {
+      // Agar koi error ho toh error toast dikhayein
+      toast.error(state.message);
+    }
+  }, [state, onSuccess]);
+
+
+
+
+
+
+
   return (
-    <form className="space-y-4 py-2">
+    <form className="space-y-4 py-2" action={formAction}>
+      {/* Agar koi error ho toh form ke upar red box mein show hoga */}
+      {state?.message && (
+  <div className={`p-3 text-sm rounded-md border ${
+    state.success 
+      ? "text-emerald-700 bg-emerald-50 border-emerald-200" 
+      : "text-destructive bg-destructive/15 border-destructive/30"
+  }`}>
+    {state.message}
+  </div>
+)}
       {/* Category Name Field */}
       <div className="space-y-2">
         <Label htmlFor="name">Category Name</Label>
-        <Input 
+        <Input
           id="name"
-          type="text" 
-          placeholder="e.g. Hostels or Doctor" 
+          name="name"
+          type="text"
+          placeholder="e.g. Hostels or Doctor"
+           defaultValue={String(state?.inputs?.name || "")}
         />
+
+        {/* Field-level error for name */}
+        {state?.errors?.name && (
+          <p className="text-xs text-destructive font-medium">
+            {state.errors.name[0]}
+          </p>
+        )}
       </div>
+
 
       {/* Slug Field */}
       <div className="space-y-2">
         <Label htmlFor="slug">Slug</Label>
-        <Input 
+        <Input
           id="slug"
-          type="text" 
-          placeholder="e.g. hostels" 
+          name="slug"
+          type="text"
+          placeholder="e.g. hostels"
+          defaultValue={String(state?.inputs?.slug || "")}
+         
         />
+
+        {/* Field-level error for slug */}
+        {state?.errors?.slug && (
+          <p className="text-xs text-destructive font-medium">
+            {state.errors.slug[0]}
+          </p>
+        )}
+      </div>
+
+      {/* icon field  */}
+
+      <div className="space-y-2">
+        <Label htmlFor="icon">Category Icon (Required)</Label>
+        <Input
+          id="icon"
+          name="icon"
+          type="file"
+          accept="image/*"
+          className="cursor-pointer"
+        />
+
+        {/* Field-level error for icon */}
+        {state?.errors?.icon && (
+          <p className="text-xs text-destructive font-medium">
+            {state.errors.icon[0]}
+          </p>
+        )}
       </div>
 
       {/* Parent Category Select */}
       <div className="space-y-2">
         <Label htmlFor="parent">Parent Category</Label>
-        <Select>
+        <Select name="parentId" defaultValue={String(state?.inputs?.parentId || "0")}>
           <SelectTrigger id="parent" className="w-full cursor-pointer">
             <SelectValue placeholder="Select parent category" />
           </SelectTrigger>
@@ -46,12 +136,19 @@ const CategoryForm = () => {
             <SelectItem value="5">Lawyer</SelectItem>
           </SelectContent>
         </Select>
+
+        {/* Field-level error for parentId */}
+        {state?.errors?.parentId && (
+          <p className="text-xs text-destructive font-medium">
+            {state.errors.parentId[0]}
+          </p>
+        )}
       </div>
 
       {/* Submit Button */}
       <div className="pt-2">
-        <Button type="submit" className="w-full cursor-pointer">
-          Save Category
+        <Button type="submit" disabled={isPending}>
+          {isPending ? "Adding Category..." : "Add Category"}
         </Button>
       </div>
     </form>
