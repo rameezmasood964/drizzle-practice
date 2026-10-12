@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { MAX_FILE_SIZE, ALLOWED_IMAGE_TYPES } from "@/utils/constants";
 import { flattenError } from "zod";
+import { eq } from "drizzle-orm";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -72,13 +73,13 @@ export async function addcategory(prevState: any, formdata: FormData) {
   const { name, slug, parentId: parentIdStr, icon: validFile } = result.data;
 
 //   yah pr hmara jo parentid variable ha wo hmari jo vlue nikli ha result.data.parentid wali usy hmnny name dia parentidstr usy 
-//   number mein convert krhy han
+//   number mein convert krhy han mean parentID : "4"
 
 
   const parentId = parentIdStr && parentIdStr !== "root" && parentIdStr !== "0"
       ? parseInt(parentIdStr)
       : null;
-
+      // yaha pr ulpoadicon variable bnya kion ky hmy image file name chye tha taky usy hm try catch mein handle kr sky 
   let uploadedFileName: string | null = null;
 
   try {
@@ -92,7 +93,8 @@ export async function addcategory(prevState: any, formdata: FormData) {
     // mily gi error ya data is iye eeror likha yeh
     const { error } = await supabase.storage
       .from("categories_icons")
-    //   validfile hmara icon ha orfileName jo hm ny oper bnya h basically hmaary icon ko isname sy uplaod krdo 
+    //   validfile hmara icon ha orfileName jo hm ny oper bnya h basically hmaary icon ko is name sy uplaod krdo 
+    // mean validfile mein icon ha hm ke rhy hain icon ko fileName sy upload krdo 
       .upload(fileName, validFile);
 
     if (error) {
@@ -206,6 +208,143 @@ export async function addcategory(prevState: any, formdata: FormData) {
       success: false,
       message: "Internal server error. Please try again later.",
        inputs: { name, slug, parentId: parentIdStr },
+    };
+  }
+}
+
+
+
+
+// update function 
+
+
+// 1. Update ke liye schema (Icon yahan optional hai)
+const updateCategorySchema = z.object({
+  id: z.string().min(1, "Category ID is required"),
+  name: z.string().min(1, "Name is required"),
+  slug: z.string().trim().toLowerCase().min(1, "Slug is required"),
+  parentId: z.string().nullable().optional(),
+  icon: z.any().optional(),
+});
+
+export async function updatecategory(prevState: any, formdata: FormData) {
+  const rawdata = Object.fromEntries(formdata);
+  
+  const result = updateCategorySchema.safeParse({
+    id: rawdata.id,
+    name: rawdata.name,
+    slug: rawdata.slug,
+    parentId: rawdata.parentId,
+    icon: formdata.get("icon"),
+  });
+
+  if (!result.success) {
+    const formattedError = z.flattenError(result.error).fieldErrors;
+    return {
+      success: false,
+      errors: formattedError,
+      message: "Please fix the errors below.",
+      inputs: { name: rawdata.name as string, slug: rawdata.slug as string, parentId: rawdata.parentId as string }, // 👈 Yeh add karein
+    };
+  }
+
+  const { id, name, slug, parentId: parentIdStr, icon: newFile } = result.data;
+
+  const categoryId = parseInt(id);
+  const parentId = parentIdStr && parentIdStr !== "root" && parentIdStr !== "0"
+    ? parseInt(parentIdStr)
+    : null;
+
+  let uploadedFileName: string | null = null;
+
+  try {
+    // 1. Pehle database se purani category ka data fetch karein (icon URL ke liye)
+    const existingCategory = await db.query.categories.findFirst({
+      where: (categories, { eq }) => eq(categories.id, categoryId),
+    });
+
+    if (!existingCategory) {
+      return { success: false, message: "Category not found." };
+    }
+
+    let iconUrl = existingCategory.icon; // By default purana icon use hoga
+
+    // 2. Agar user ne naya icon upload kiya hai
+    if (newFile && newFile instanceof File && newFile.size > 0) {
+      if (newFile.size > MAX_FILE_SIZE) {
+        return { success: false, errors: { icon: ["Dont Upload more than 2MB File"] } };
+      }
+      if (!ALLOWED_IMAGE_TYPES.includes(newFile.type)) {
+        return { success: false, errors: { icon: ["Please Upload only JPG,PNG,WEBp"] } };
+      }
+
+      const safeName = newFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
+      const fileName = `${Date.now()}-${safeName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("categories_icons")
+        .upload(fileName, newFile);
+
+      if (uploadError) {
+        return { success: false, message: uploadError.message };
+      }
+
+      uploadedFileName = fileName;
+
+      const { data } = supabase.storage
+        .from("categories_icons")
+        .getPublicUrl(fileName);
+
+      iconUrl = data.publicUrl;
+    }
+
+    // 3. Database update query
+    await db.update(categories)
+      .set({
+        name,
+        slug,
+        parentId,
+        icon: iconUrl,
+      })
+      .where(eq(categories.id, categoryId)); // Dhyan rahe yahan eq import hona chahiye dbal se ya eq operator use ho
+
+    revalidatePath("/admin/categories");
+    return { success: true, message: "Category updated successfully!" };
+
+  } catch (error: any) {
+    if (isRedirectError(error)) throw error;
+
+    if (uploadedFileName) {
+      await supabase.storage
+        .from("categories_icons")
+        .remove([uploadedFileName]);
+    }
+
+    const pgError = error.cause || error;
+    const errorCode = pgError.code || error.code;
+    const constraintName = pgError.constraint_name || error.constraint_name || "";
+
+    if (errorCode === "23505") {
+      if (constraintName === "categories_slug_unique") {
+        return {
+          success: false,
+          errors: { slug: ["This slug already available. Kindly change your slug name."] },
+          inputs: { name, slug, parentId: parentIdStr }, // 👈 Yeh add karein
+        };
+      }
+      if (constraintName === "categories_name_lower_unique") {
+        return {
+          success: false,
+          errors: { name: ["Category Name Already Available"] },
+          inputs: { name, slug, parentId: parentIdStr }, // 👈 Yeh add karein
+        };
+      }
+    }
+
+    console.error("SERVER ACTION CRITICAL ERROR (UPDATE):", error);
+    return {
+      success: false,
+      message: "Internal server error. Please try again later.",
     };
   }
 }

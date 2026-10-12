@@ -132,7 +132,7 @@ export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
-  icon: text("icon"), // lucide icon ka naam ya image url
+  icon: text("icon").notNull(), // lucide icon ka naam ya image url
   parentId: integer("parent_id").references((): AnyPgColumn => categories.id, {
     onDelete: "set null",
   }),
