@@ -93,7 +93,7 @@ export async function addcategory(prevState: any, formdata: FormData) {
     // mily gi error ya data is iye eeror likha yeh
     const { error } = await supabase.storage
       .from("categories_icons")
-    //   validfile hmara icon ha orfileName jo hm ny oper bnya h basically hmaary icon ko is name sy uplaod krdo 
+    //   validfile hmara icon ha or fileName jo hm ny oper bnya h basically hmaary icon ko is name sy uplaod krdo 
     // mean validfile mein icon ha hm ke rhy hain icon ko fileName sy upload krdo 
       .upload(fileName, validFile);
 
@@ -215,10 +215,27 @@ export async function addcategory(prevState: any, formdata: FormData) {
 
 
 
+
+
+
+
+
+
+
+// ........****************************************...................................
+
 // update function 
 
 
 // 1. Update ke liye schema (Icon yahan optional hai)
+
+
+
+
+
+
+// Create (Add) Schema: Isme id nahi chahiye hoti (kyunki ID database ne banani hai).
+// Update Schema: Isme id lazmi chahiye hoti hai (kyunki database ko batana hai ke kis record ko change karna hai).
 const updateCategorySchema = z.object({
   id: z.string().min(1, "Category ID is required"),
   name: z.string().min(1, "Name is required"),
@@ -230,13 +247,7 @@ const updateCategorySchema = z.object({
 export async function updatecategory(prevState: any, formdata: FormData) {
   const rawdata = Object.fromEntries(formdata);
   
-  const result = updateCategorySchema.safeParse({
-    id: rawdata.id,
-    name: rawdata.name,
-    slug: rawdata.slug,
-    parentId: rawdata.parentId,
-    icon: formdata.get("icon"),
-  });
+  const result = updateCategorySchema.safeParse(rawdata);
 
   if (!result.success) {
     const formattedError = z.flattenError(result.error).fieldErrors;
@@ -250,23 +261,50 @@ export async function updatecategory(prevState: any, formdata: FormData) {
 
   const { id, name, slug, parentId: parentIdStr, icon: newFile } = result.data;
 
+
+  // yaha hm ny from sy aye hooye string id ko number mein convert kia 
   const categoryId = parseInt(id);
+
   const parentId = parentIdStr && parentIdStr !== "root" && parentIdStr !== "0"
     ? parseInt(parentIdStr)
     : null;
+
+
+//     Agar admin ne naya file diya hai: Toh code us file ko Supabase Storage par
+//  upload karta hai, wahan se uska naya URL milta hai, aur hum us URL ko 
+// is uploadedFileName variable ke andar daal dete hain.
+
+// Agar admin ne naya file nahi diya: Toh code database se purana 
+// wala category record nikalta hai aur uska purana icon utha kar
+//  is uploadedFileName variable mein daal deta hai.
 
   let uploadedFileName: string | null = null;
 
   try {
     // 1. Pehle database se purani category ka data fetch karein (icon URL ke liye)
+    //2. db hmara database connection ha , query yeh drizzle ka api ha jo data fetch krta ha 
+    //3. categories hmara databse men table ha 
+    // 4. hm ny findFirst is liye lgya ha kion ky where ka kam ha search kro wo hmesah multiple object deta h array emin []
+    // hmy chye 1 result  isliye hm findFirst use krty hain taky object mily {} jesy first object mly wo searching stop krdy 
+
+
     const existingCategory = await db.query.categories.findFirst({
-      where: (categories, { eq }) => eq(categories.id, categoryId),
+
+      // eq mean equal 
+      // // Baghair Destructuring Ke: where: (categories, operators) => operators.eq(categories.id, categoryId),
+      // hmary pas eq ek operators ah or bhi kafi operators hoty ahin 
+      // sb sy pehly data aya databse sy categories mein phir aya hmary parameter c mein phir hm ny check kia 
+      // ky c.iid mean categories.id equal ho categoryid sy jo hmary form sy aye ha 
+
+      where: (c, { eq }) => eq(c.id, categoryId),
     });
 
     if (!existingCategory) {
       return { success: false, message: "Category not found." };
     }
 
+
+    // yeh icon url isliye likha agr admin icon change ni krta hmy datbase mein icon to bhejna ha isliye yeh likha
     let iconUrl = existingCategory.icon; // By default purana icon use hoga
 
     // 2. Agar user ne naya icon upload kiya hai
@@ -281,12 +319,15 @@ export async function updatecategory(prevState: any, formdata: FormData) {
       const safeName = newFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
       const fileName = `${Date.now()}-${safeName}`;
 
-      const { error: uploadError } = await supabase.storage
+      const { error } = await supabase.storage
         .from("categories_icons")
         .upload(fileName, newFile);
 
-      if (uploadError) {
-        return { success: false, message: uploadError.message };
+      if (error) {
+        return { success: false,
+           message: error.message,
+            inputs: { name, slug, parentId: parentIdStr },
+           };
       }
 
       uploadedFileName = fileName;

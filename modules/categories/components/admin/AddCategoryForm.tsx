@@ -327,6 +327,7 @@ interface CategoryFormProps {
 }
 
 const CategoryForm = ({ onSuccess, categories, initialData }: CategoryFormProps) => {
+  // !! iska mtlb data abhi skta h or ni bh askta 
   const isEditing = !!initialData;
   const actionToRun = isEditing ? updatecategory : addcategory;
 
@@ -408,6 +409,8 @@ const CategoryForm = ({ onSuccess, categories, initialData }: CategoryFormProps)
 
       {/* Parent Category Select */}
       <div className="space-y-2">
+
+        
         <Label htmlFor="parent">Parent Category</Label>
         <Select
           name="parentId"
@@ -418,6 +421,8 @@ const CategoryForm = ({ onSuccess, categories, initialData }: CategoryFormProps)
           <SelectTrigger id="parent" className="w-full cursor-pointer">
             <SelectValue placeholder="Select parent category" />
           </SelectTrigger>
+
+
           <SelectContent>
             <SelectItem value="0">None (Root Category)</SelectItem>
             
@@ -429,12 +434,15 @@ const CategoryForm = ({ onSuccess, categories, initialData }: CategoryFormProps)
                 </SelectItem>
               ))}
           </SelectContent>
+          
         </Select>
         {formState?.errors?.parentId && (
           <p className="text-xs text-destructive font-medium">
             {formState.errors.parentId[0]}
           </p>
         )}
+
+
       </div>
 
       {/* Submit Button */}

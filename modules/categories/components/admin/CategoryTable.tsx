@@ -35,33 +35,45 @@ const CategoryTable = ({ categories }: CategoryTableProps) => {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold tracking-tight">Categories</h2>
         
-        {/* 1. Add Category Dialog */}
+        {/* 1 dialog add category ka ............ */}
         <Dialog open={open} onOpenChange={setOpen}>
+
+          
           <DialogTrigger asChild>
             <Button className="cursor-pointer">Add Category +</Button>
           </DialogTrigger>
 
           <DialogContent className="sm:max-w-md">
+
             <DialogHeader>
               <DialogTitle>Add New Category</DialogTitle>
             </DialogHeader>
+
             <CategoryForm
               onSuccess={() => setOpen(false)}
               categories={categories}
             />
           </DialogContent>
+
+
+          
         </Dialog>
       </div>
 
-      {/* 2. Edit Category Dialog Modal */}
+     
+      {/* 2nd dialog editing category ka........  */}
       <Dialog 
+
+
         open={isEditOpen} 
+
         onOpenChange={(open) => {
           setIsEditOpen(open);
           if (!open) setEditingCategory(null);
         }}
       >
         <DialogContent className="sm:max-w-md">
+
           <DialogHeader>
             <DialogTitle>Edit Category</DialogTitle>
           </DialogHeader>
@@ -77,9 +89,14 @@ const CategoryTable = ({ categories }: CategoryTableProps) => {
             />
           )}
         </DialogContent>
+
+
+        
       </Dialog>
 
-      {/* Shadcn Table start */}
+
+
+      {/* Shadcn Table start here ................. */}
       <div className="rounded-md border border-border overflow-hidden">
         <Table>
           {/* heading of table  */}
@@ -105,15 +122,30 @@ const CategoryTable = ({ categories }: CategoryTableProps) => {
                 </TableCell>
               </TableRow>
             ) : (
+
+              // yaha pr cat ky pas id, name, or level ha kion ky yeh formatcategorytree sy arha ha isliye 
+              //isliye  hm ny  map ky bad find lgya taky icon slug wgera nikal sky 
               formattedCategories.map((cat) => {
+
+                // "Hamare paas sirf ID thi jo formatCategoryTree se map ke paas aayi thi cat ky pas. Hum ne .find() lagaya aur kaha:
+                //  'Asli categories mein jao, wahan har row ki c.id ko check karo, aur jaise hi tumhe cat.id mil jaye, 
+                // uska poora data (icon, slug, name) utha kar de do!'
+                
                 const originalCategory = categories.find(
                   (c) => c.id === cat.id,
                 );
 
+                // Mujhe originalCategory?.parentId se parent ki ID mil gayi hai (misal ke taur par ID 2).
+                //  Ab jao asli categories wali list mein, aur wahan c.id ko is parentId ke sath match karo.
+                //  Jaise hi match ho jaye, toh us parent category ka poora data (aur khas tor par uska naam)
+                //  utha kar parentCategory mein save kar lo taake hum table mein dikha sakein ke yeh kis Root 
+                // ya Parent ke under hai!"
                 const parentCategory = categories.find(
                   (c) => c.id === originalCategory?.parentId,
                 );
-
+                // "Dekho bhai, cat.level ki jo bhi value hai woh level mein daal do. Lekin,
+                //  agar kisi waja se cat.level mojood na ho (yani wo undefined ya null ho)
+                // , toh ghabrana mat, by default uski jagah 0 (zero) rakh dena!"
                 const level = cat.level || 0;
 
                 return (
@@ -195,6 +227,9 @@ const CategoryTable = ({ categories }: CategoryTableProps) => {
                       >
                         Edit
                       </Button>
+
+
+
                       <Button
                         variant="ghost"
                         size="sm"
