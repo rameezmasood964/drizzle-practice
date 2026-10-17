@@ -90,65 +90,45 @@ export const fieldType = pgEnum("field_type", [
   "boolean",
 ]);
 
-// export const listingStatus = pgEnum('listing_status', [
-//   'draft', // user ne form shuru kiya, submit nahi kiya
-//   'pending', // submit ho gaya, admin ke verify karne ka intezar
-//   'approved', // live
-//   'rejected',
-//   'expired',
-// ]);
+export const listingStatus = pgEnum("listing_status", [
+  "draft", // user ne form shuru kiya, submit nahi kiya
+  "pending", // submit ho gaya, admin ke verify karne ka intezar
+  "approved", // live
+  "rejected",
+  "expired",
+]);
 
-// export const paymentMethod = pgEnum('payment_method', [
-//   'jazzcash',
-//   'easypaisa',
-//   'bank',
-//   'cash',
-// ]);
+export const paymentMethod = pgEnum("payment_method", [
+  "jazzcash",
+  "easypaisa",
+  "bank",
+  "cash",
+]);
 
-// export const paymentStatus = pgEnum('payment_status', [
-//   'pending',
-//   'confirmed',
-//   'rejected',
-// ]);
-
-// export const eventType = pgEnum('event_type', [
-//   'view',
-//   'whatsapp_click',
-//   'call_click',
-//   'search',
-// ]);
-
-/* ------------------------------------------------------------------ */
-/* Profiles (Supabase Auth ke user se jura hua)                        */
-/* ------------------------------------------------------------------ */
-// id wahi hoga jo Supabase auth.users ka id hai.
-// Signup ke baad is table mein ek row banani hogi.
-
-/* ------------------------------------------------------------------ */
-/* Categories (sirf admin add karta hai)                               */
-/* ------------------------------------------------------------------ */
-
-export const categories = pgTable("categories", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
-  icon: text("icon").notNull(), // lucide icon ka naam ya image url
-  parentId: integer("parent_id").references((): AnyPgColumn => categories.id, {
-    onDelete: "set null",
-  }),
-  sortOrder: integer("sort_order").default(0).notNull(),
-  // delete mat karo, is ko false kar do (listings bach jati hain)
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-},
-(t) => [
-  uniqueIndex("categories_name_lower_unique").on(sql`lower(${t.name})`),
-]
+export const categories = pgTable(
+  "categories",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    icon: text("icon").notNull(), // lucide icon ka naam ya image url
+    parentId: integer("parent_id").references(
+      (): AnyPgColumn => categories.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    // delete mat karo, is ko false kar do (listings bach jati hain)
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("categories_name_lower_unique").on(sql`lower(${t.name})`),
+  ],
 );
-
-
 
 /* ------------------------------------------------------------------ */
 /* Category fields (form ki definition)                                */
@@ -226,21 +206,24 @@ export const listings = pgTable(
       },
     ),
 
-    // status: listingStatus('status').default('draft').notNull(),
-    // isVerified: boolean('is_verified').default(false).notNull(),
-    // isFeatured: boolean('is_featured').default(false).notNull(),
-    // adminNotes: text('admin_notes'), // sirf admin ko dikhe
+    // Status: abhi sirf admin add karta hai, isliye default draft
+    status: listingStatus("status").default("draft").notNull(),
+    isVerified: boolean("is_verified").default(false).notNull(),
+    isFeatured: boolean("is_featured").default(false).notNull(),
+    adminNotes: text("admin_notes"), // sirf admin ko dikhe
 
-    // expiresAt: timestamp('expires_at', { withTimezone: true }),
-    // createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    // updatedAt: timestamp('updated_at', { withTimezone: true })
-    //   .defaultNow()
-    //   .notNull()
-    //   .$onUpdate(() => new Date()),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
   },
   (t) => [
     index("listings_category_idx").on(t.categoryId),
-    // index('listings_status_idx').on(t.status),
+    index("listings_status_idx").on(t.status),
     index("listings_owner_idx").on(t.ownerId),
     // JSONB ke andar filter tez karne ke liye
     index("listings_details_gin").using("gin", t.details),
@@ -264,63 +247,6 @@ export const listingImages = pgTable(
   },
   (t) => [index("listing_images_listing_idx").on(t.listingId)],
 );
-
-/* ------------------------------------------------------------------ */
-/* Payments (shuru mein manual)                                        */
-/* ------------------------------------------------------------------ */
-
-// export const payments = pgTable(
-//   'payments',
-//   {
-//     id: serial('id').primaryKey(),
-//     listingId: integer('listing_id')
-//       .references(() => listings.id, { onDelete: 'cascade' })
-//       .notNull(),
-//     amount: integer('amount').notNull(), // Rs. mein
-//     method: paymentMethod('method').notNull(),
-//     transactionRef: text('transaction_ref'), // user ka diya hua transaction ID
-//     screenshotUrl: text('screenshot_url'),
-//     status: paymentStatus('status').default('pending').notNull(),
-//     confirmedBy: uuid('confirmed_by').references(() => profiles.id, {
-//       onDelete: 'set null',
-//     }),
-//     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
-//     note: text('note'),
-//     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-//   },
-//   (t) => [index('payments_listing_idx').on(t.listingId)],
-// );
-
-// /* ------------------------------------------------------------------ */
-// /* Events (views, clicks, searches), sirf anonymous data               */
-// /* ------------------------------------------------------------------ */
-
-// export const events = pgTable(
-//   'events',
-//   {
-//     id: serial('id').primaryKey(),
-//     type: eventType('type').notNull(),
-//     listingId: integer('listing_id').references(() => listings.id, {
-//       onDelete: 'cascade',
-//     }),
-//     categoryId: integer('category_id').references(() => categories.id, {
-//       onDelete: 'set null',
-//     }),
-//     searchText: text('search_text'), // sirf type = 'search' ke liye
-//     resultsCount: integer('results_count'), // 0 ho to "kuch nahi mila"
-//     visitorId: text('visitor_id'), // random anonymous ID, naam/phone nahi
-//     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-//   },
-//   (t) => [
-//     index('events_listing_type_idx').on(t.listingId, t.type),
-//     index('events_category_idx').on(t.categoryId),
-//     index('events_created_idx').on(t.createdAt),
-//   ],
-// );
-
-/* ------------------------------------------------------------------ */
-/* Types                                                               */
-/* ------------------------------------------------------------------ */
 
 export type Category = typeof categories.$inferSelect;
 export type CategoryField = typeof categoryFields.$inferSelect;
