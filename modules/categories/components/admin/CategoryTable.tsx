@@ -1,4 +1,12 @@
 "use client";
+import Link from "next/link";
+import { MoreHorizontal, SlidersHorizontal, Edit2, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import { useState } from "react";
 import {
@@ -195,7 +203,7 @@ const CategoryTable = ({ categories }: CategoryTableProps) => {
                     </TableCell>
 
                     {/* Actions */}
-                    <TableCell className="p-4 space-x-3">
+                    {/* <TableCell className="p-4 space-x-3">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -239,6 +247,77 @@ const CategoryTable = ({ categories }: CategoryTableProps) => {
                       >
                         Delete
                       </Button>
+                    </TableCell> */}
+                    <TableCell className="p-4">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 p-0 cursor-pointer"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Open menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+
+                        <DropdownMenuContent align="end" className="w-40">
+                          {/* Manage Fields Action */}
+                          <DropdownMenuItem asChild>
+                            <Link
+                              href={`/admin/categories/${cat.id}/fields`}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                              <span>Fields</span>
+                            </Link>
+                          </DropdownMenuItem>
+
+                          {/* Edit Action */}
+                          <DropdownMenuItem
+                            className="flex items-center gap-2 cursor-pointer"
+                            onClick={() => {
+                              const originalCategory = categories.find(
+                                (c) => c.id === cat.id,
+                              );
+                              setEditingCategory(originalCategory);
+                              setIsEditOpen(true);
+                            }}
+                          >
+                            <Edit2 className="h-4 w-4 text-muted-foreground" />
+                            <span>Edit</span>
+                          </DropdownMenuItem>
+
+                          {/* Delete Action */}
+                          <DropdownMenuItem
+                            className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
+                            onClick={async () => {
+                              const confirmed = window.confirm(
+                                `Are you sure to delete "${originalCategory?.name}"?`,
+                              );
+
+                              if (!confirmed) return;
+
+                              try {
+                                const result = await deleteCategory(
+                                  cat.id.toString(),
+                                );
+                                if (result.success) {
+                                  console.log(result.message);
+                                } else {
+                                  alert(result.message || "Failed to delete");
+                                }
+                              } catch (error) {
+                                console.error("Delete error:", error);
+                                alert("Something went wrong!");
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 );

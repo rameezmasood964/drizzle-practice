@@ -17,3 +17,12 @@ export interface ListingStatsProps {
   draft?: number;
   rejected?: number;
 }
+
+export interface CategoryFilterOption {
+  id: string;
+  name: string;
+}
+
+export interface ListingFiltersProps {
+  categories?: CategoryFilterOption[];
+}
