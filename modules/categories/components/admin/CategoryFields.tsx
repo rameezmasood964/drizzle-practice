@@ -1,0 +1,225 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  SlidersHorizontal,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { CategoryFieldsProps } from "../../types";
+import AddCategoryFieldForm from "./AddCategoryFieldForm";
+
+export default function CategoryFields({
+  categoryName,
+  categoryId,
+  initialFields = [],
+}: CategoryFieldsProps) {
+  const [isAddOpen, setIsAddOpen] = useState(false);
+
+  const fields =
+    initialFields.length > 0
+      ? initialFields
+      : [
+          {
+            id: 1,
+            label: "Consultation Fee",
+            key: "consultation_fee",
+            type: "number",
+            isRequired: true,
+            isFilterable: true,
+          },
+          {
+            id: 2,
+            label: "Specialization",
+            key: "specialization",
+            type: "select",
+            isRequired: true,
+            isFilterable: true,
+          },
+          {
+            id: 3,
+            label: "PMDC Registration No",
+            key: "pmdc_no",
+            type: "text",
+            isRequired: false,
+            isFilterable: false,
+          },
+        ];
+
+  return (
+    <div className="space-y-6">
+      {/* 1. Header & Navigation */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Link href="/admin/categories">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 cursor-pointer"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight">
+                Custom Fields
+              </h1>
+              <Badge variant="secondary" className="font-semibold text-xs">
+                {categoryName || "Category"}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Manage dynamic specifications and filters for listings in this
+              category.
+            </p>
+          </div>
+        </div>
+
+        {/* Add Field Sheet Trigger (Side Drawer) */}
+        <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
+          <SheetTrigger asChild>
+            <Button className="cursor-pointer gap-2">
+              <Plus className="h-4 w-4" />
+              Add Field
+            </Button>
+          </SheetTrigger>
+
+          <SheetContent className="w-full sm:max-w-lg flex flex-col p-0 h-full">
+            <SheetHeader className="p-6 pb-4 border-b text-left">
+              <SheetTitle>Add Custom Field</SheetTitle>
+              <SheetDescription>
+                Create a dynamic field for &quot;{categoryName || "Category"}
+                &quot;.
+              </SheetDescription>
+            </SheetHeader>
+
+            {/* Form Component */}
+            <AddCategoryFieldForm
+              categoryId={categoryId}
+              onSuccess={() => setIsAddOpen(false)}
+            />
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* 2. Fields Table */}
+      <div className="rounded-xl border bg-card text-card-foreground shadow p-6">
+        <div className="rounded-md border border-border overflow-hidden">
+          <Table>
+            <TableHeader className="bg-muted/50">
+              <TableRow>
+                <TableHead className="p-4 font-medium">Label</TableHead>
+                <TableHead className="p-4 font-medium">Key</TableHead>
+                <TableHead className="p-4 font-medium">Type</TableHead>
+                <TableHead className="p-4 font-medium">Required</TableHead>
+                <TableHead className="p-4 font-medium">Filterable</TableHead>
+                <TableHead className="p-4 font-medium text-right">
+                  Actions
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody className="divide-y divide-border">
+              {fields.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="text-center py-10 text-muted-foreground"
+                  >
+                    <SlidersHorizontal className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                    No custom fields added yet. Click &quot;Add Field&quot; to
+                    configure.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                fields.map((f) => (
+                  <TableRow
+                    key={f.id}
+                    className="hover:bg-muted/50 transition-colors"
+                  >
+                    <TableCell className="p-4 font-medium text-foreground">
+                      {f.label}
+                    </TableCell>
+
+                    <TableCell className="p-4">
+                      <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono text-muted-foreground">
+                        {f.key}
+                      </code>
+                    </TableCell>
+
+                    <TableCell className="p-4">
+                      <Badge variant="outline" className="capitalize text-xs">
+                        {f.type}
+                      </Badge>
+                    </TableCell>
+
+                    <TableCell className="p-4">
+                      {f.isRequired ? (
+                        <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Yes
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <XCircle className="h-3.5 w-3.5 opacity-50" />
+                          No
+                        </span>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="p-4">
+                      {f.isFilterable ? (
+                        <span className="flex items-center gap-1.5 text-xs text-primary font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Yes
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <XCircle className="h-3.5 w-3.5 opacity-50" />
+                          No
+                        </span>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="p-4 text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </div>
+  );
+}

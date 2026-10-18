@@ -1,4 +1,3 @@
-
 import { db } from "@/app/db";
 import { categories } from "@/app/db/schema";
 import { eq } from "drizzle-orm";
@@ -15,5 +14,17 @@ export async function getCategories() {
   } catch (error) {
     console.error("Failed to fetch categories:", error);
     return [];
+  }
+}
+
+export async function getCategoryById(categoryId: number) {
+  try {
+    const data = await db.query.categories.findFirst({
+      where: (categories, { eq }) => eq(categories.id, categoryId),
+    });
+    return data;
+  } catch (error) {
+    console.error("Failed to fetch category by ID:", error);
+    return null;
   }
 }

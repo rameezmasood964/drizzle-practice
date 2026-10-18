@@ -26,3 +26,36 @@ export interface CategoryOption {
   name: string;
   level: number;
 }
+
+
+// Drizzle Schema ke fieldType enum ke mutabiq
+export type CategoryFieldType =
+  | "text"
+  | "number"
+  | "textarea"
+  | "select"
+  | "multiselect"
+  | "boolean";
+
+// Database category_fields table ka single record
+export interface CategoryFieldItem {
+  id: number;
+  categoryId: number;
+  key: string;
+  label: string;
+  type: CategoryFieldType;
+  isRequired: boolean;
+  options: string[] | null;
+  placeholder?: string | null;
+  helpText?: string | null;
+  sortOrder: number;
+  isFilterable: boolean;
+  isActive: boolean;
+}
+
+// CategoryFields UI component ke props
+export interface CategoryFieldsProps {
+  categoryName?: string;
+  categoryId: string | number;
+  initialFields?: CategoryFieldItem[];
+}
