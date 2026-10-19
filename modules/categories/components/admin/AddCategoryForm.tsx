@@ -19,7 +19,6 @@
 
 // import { CategoryFormProps } from "../../types";
 // import { formatCategoryTree } from "../../utils";
- 
 
 // const CategoryForm = ({ onSuccess,categories }: CategoryFormProps) => {
 
@@ -27,13 +26,12 @@
 //   const formattedCategories = formatCategoryTree(categories);
 //   const [state, formAction, isPending] = useActionState(addcategory, null);
 
-
 //   useEffect(() => {
 //   if (state?.success) {
 //     toast.success(state.message || "Category added successfully!");
 //     onSuccess?.();
 
-//     // "Message HAI ✅ AUR Errors NAHI hain ✅ mean agr error ni ha to global errro ha naky singlee" 
+//     // "Message HAI ✅ AUR Errors NAHI hain ✅ mean agr error ni ha to global errro ha naky singlee"
 //   } else if (state?.message && !state?.errors) {
 //     // sirf general errors ka toast, field errors ka nahi
 //     toast.error(state.message);
@@ -42,7 +40,7 @@
 
 //   return (
 //     <form className="space-y-4 py-2" action={formAction}>
-     
+
 //       {/* Category Name Field */}
 //       <div className="space-y-2">
 //         <Label htmlFor="name">Category Name</Label>
@@ -113,8 +111,7 @@
 //           </SelectTrigger>
 //           <SelectContent>
 //             <SelectItem value="0">None (Root Category)</SelectItem>
-           
-          
+
 //           {formattedCategories.map((cat) => (
 //            <SelectItem key={cat.id} value={String(cat.id)}>
 //               {cat.name}
@@ -142,9 +139,6 @@
 // };
 
 // export default CategoryForm;
-
-
-
 
 // "use client";
 
@@ -193,7 +187,7 @@
 
 //   return (
 //     <form className="space-y-4 py-2" action={formAction}>
-      
+
 //       {/* Hidden Category ID for Edit Mode */}
 //       {isEditing && (
 //         <input type="hidden" name="id" value={initialData.id} />
@@ -266,7 +260,7 @@
 //           </SelectTrigger>
 //           <SelectContent>
 //             <SelectItem value="0">None (Root Category)</SelectItem>
-            
+
 //             {formattedCategories
 //               .filter((cat) => !isEditing || cat.id !== initialData.id) // Khud ko apna parent banne se rokne ke liye guard
 //               .map((cat) => (
@@ -286,8 +280,8 @@
 //       {/* Submit Button */}
 //       <div className="pt-2">
 //         <Button type="submit" disabled={isPending} className="cursor-pointer">
-//           {isPending 
-//             ? (isEditing ? "Updating..." : "Adding Category...") 
+//           {isPending
+//             ? (isEditing ? "Updating..." : "Adding Category...")
 //             : (isEditing ? "Update Category" : "Add Category")}
 //         </Button>
 //       </div>
@@ -296,9 +290,6 @@
 // };
 
 // export default CategoryForm;
-
-
-
 
 "use client";
 
@@ -316,7 +307,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { addcategory, updatecategory } from "../../actions";
+import { addcategory, updatecategory } from "../../actions/categories";
 import { useEffect } from "react";
 import { formatCategoryTree } from "../../utils";
 
@@ -326,20 +317,32 @@ interface CategoryFormProps {
   initialData?: any;
 }
 
-const CategoryForm = ({ onSuccess, categories, initialData }: CategoryFormProps) => {
-  // !! iska mtlb data abhi skta h or ni bh askta 
+const CategoryForm = ({
+  onSuccess,
+  categories,
+  initialData,
+}: CategoryFormProps) => {
+  // !! iska mtlb data abhi skta h or ni bh askta
   const isEditing = !!initialData;
   const actionToRun = isEditing ? updatecategory : addcategory;
 
   const formattedCategories = formatCategoryTree(categories);
-  const [state, formAction, isPending] = useActionState(actionToRun as any, null);
+  const [state, formAction, isPending] = useActionState(
+    actionToRun as any,
+    null,
+  );
 
   // State ko explicitly 'any' cast kar liya taake TypeScript error na de
   const formState = state as any;
 
   useEffect(() => {
     if (formState?.success) {
-      toast.success(formState.message || (isEditing ? "Category updated successfully!" : "Category added successfully!"));
+      toast.success(
+        formState.message ||
+          (isEditing
+            ? "Category updated successfully!"
+            : "Category added successfully!"),
+      );
       onSuccess?.();
     } else if (formState?.message && !formState?.errors) {
       toast.error(formState.message);
@@ -348,11 +351,8 @@ const CategoryForm = ({ onSuccess, categories, initialData }: CategoryFormProps)
 
   return (
     <form className="space-y-4 py-2" action={formAction}>
-      
       {/* Hidden Category ID for Edit Mode */}
-      {isEditing && (
-        <input type="hidden" name="id" value={initialData.id} />
-      )}
+      {isEditing && <input type="hidden" name="id" value={initialData.id} />}
 
       {/* Category Name Field */}
       <div className="space-y-2">
@@ -409,23 +409,20 @@ const CategoryForm = ({ onSuccess, categories, initialData }: CategoryFormProps)
 
       {/* Parent Category Select */}
       <div className="space-y-2">
-
-        
         <Label htmlFor="parent">Parent Category</Label>
         <Select
           name="parentId"
           defaultValue={String(
-            formState?.inputs?.parentId || initialData?.parentId || "0"
+            formState?.inputs?.parentId || initialData?.parentId || "0",
           )}
         >
           <SelectTrigger id="parent" className="w-full cursor-pointer">
             <SelectValue placeholder="Select parent category" />
           </SelectTrigger>
 
-
           <SelectContent>
             <SelectItem value="0">None (Root Category)</SelectItem>
-            
+
             {formattedCategories
               .filter((cat) => !isEditing || cat.id !== initialData.id)
               .map((cat) => (
@@ -434,23 +431,24 @@ const CategoryForm = ({ onSuccess, categories, initialData }: CategoryFormProps)
                 </SelectItem>
               ))}
           </SelectContent>
-          
         </Select>
         {formState?.errors?.parentId && (
           <p className="text-xs text-destructive font-medium">
             {formState.errors.parentId[0]}
           </p>
         )}
-
-
       </div>
 
       {/* Submit Button */}
       <div className="pt-2">
         <Button type="submit" disabled={isPending} className="cursor-pointer">
-          {isPending 
-            ? (isEditing ? "Updating..." : "Adding Category...") 
-            : (isEditing ? "Update Category" : "Add Category")}
+          {isPending
+            ? isEditing
+              ? "Updating..."
+              : "Adding Category..."
+            : isEditing
+              ? "Update Category"
+              : "Add Category"}
         </Button>
       </div>
     </form>

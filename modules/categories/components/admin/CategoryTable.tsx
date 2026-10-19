@@ -28,7 +28,7 @@ import {
 import CategoryForm from "./AddCategoryForm";
 import { CategoryTableProps } from "../../types";
 import { formatCategoryTree } from "../../utils";
-import { deleteCategory } from "../../actions";
+import { deleteCategory } from "../../actions/categories";
 
 const CategoryTable = ({ categories }: CategoryTableProps) => {
   const [open, setOpen] = useState(false);

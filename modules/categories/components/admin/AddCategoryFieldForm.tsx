@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -12,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { createCategoriesField } from "../../actions/fields";
 
 interface AddCategoryFieldFormProps {
   categoryId: string | number;
@@ -22,7 +24,72 @@ const AddCategoryFieldForm = ({
   categoryId,
   onSuccess,
 }: AddCategoryFieldFormProps) => {
+  // all states
   const [fieldType, setFieldType] = useState("text");
+  const [label, setLabel] = useState("");
+  const [key, setKey] = useState("");
+  const [options, setOptions] = useState("");
+  const [placeholder, setPlaceholder] = useState("");
+  const [helpText, setHelpText] = useState("");
+  const [isRequired, setIsRequired] = useState(false);
+  const [isFilterable, setIsFilterable] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const generateKey = (text: string) => {
+    return text
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "_") // har space ki jagah '_' lagaye
+      .replace(/[^a-z0-9_]/g, ""); // special symbols jaise '(', ')', '.', '@' ko hata de
+  };
+
+  // handle submitfunction
+
+  const handleSubmit = async () => {
+    setIsLoading(true);
+    try {
+      const optionsArray =
+        fieldType === "select" || fieldType === "multiselect"
+          ? options
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : null;
+
+      // Payload Packet
+      // Payload ka matlab hota hai
+      //  "Woh saara data jo hum aik dabbe (object) mein pack karke Server Action ko bhejte hain."
+
+      const payload = {
+        categoryId: Number(categoryId),
+        label: label.trim(),
+        key: key.trim(),
+        type: fieldType as any,
+        options: optionsArray,
+        placeholder: placeholder.trim() || null,
+        helpText: helpText.trim() || null,
+        isRequired,
+        isFilterable,
+      };
+
+      // abh is payload ko hm serveraction tk bhejy gy
+
+      const response = await createCategoriesField(payload);
+      // 👇 Yeh console lagayein:
+      console.log("category field ka server action pr response", response);
+      if (response.success) {
+        toast.success(response.message || "Custom field added successfully!");
+        onSuccess();
+      } else {
+        toast.error(response.error || "Failed to add field");
+      }
+    } catch (error) {
+      console.error("Submit error:", error);
+      toast.error("Something went wrong!");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -31,7 +98,16 @@ const AddCategoryFieldForm = ({
         {/* Field Label */}
         <div className="space-y-1.5">
           <Label htmlFor="label">Field Label</Label>
-          <Input id="label" placeholder="e.g. Consultation Fee (Rs.)" />
+          <Input
+            id="label"
+            placeholder="e.g. Consultation Fee (Rs.)"
+            value={label}
+            onChange={(e) => {
+              const val = e.target.value;
+              setLabel(val);
+              setKey(generateKey(val)); // 👈 Yahan key auto-generate ho rahi hai
+            }}
+          />
         </div>
 
         {/* Field Key */}
@@ -41,6 +117,8 @@ const AddCategoryFieldForm = ({
             id="key"
             placeholder="e.g. consultation_fee"
             className="font-mono text-sm"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
           />
           <p className="text-[11px] text-muted-foreground">
             Unique identifier used in database attributes.
@@ -69,14 +147,22 @@ const AddCategoryFieldForm = ({
         {(fieldType === "select" || fieldType === "multiselect") && (
           <div className="space-y-1.5">
             <Label htmlFor="options">Dropdown Options (Comma Separated)</Label>
-            <Input id="options" placeholder="e.g. Dentist, Cardiologist, ENT" />
+            <Input
+              id="options"
+              value={options}
+              onChange={(e) => setOptions(e.target.value)}
+            />
           </div>
         )}
 
         {/* Placeholder */}
         <div className="space-y-1.5">
           <Label htmlFor="placeholder">Placeholder (Optional)</Label>
-          <Input id="placeholder" placeholder="e.g. Enter fee amount in PKR" />
+          <Input
+            id="placeholder"
+            value={placeholder}
+            onChange={(e) => setPlaceholder(e.target.value)}
+          />
           <p className="text-[11px] text-muted-foreground">
             Hint text shown inside the input field.
           </p>
@@ -88,6 +174,8 @@ const AddCategoryFieldForm = ({
           <Input
             id="helpText"
             placeholder="e.g. Only enter numeric fee without Rs or PKR"
+            value={helpText}
+            onChange={(e) => setHelpText(e.target.value)}
           />
           <p className="text-[11px] text-muted-foreground">
             Guidance text shown below the field.
@@ -103,7 +191,10 @@ const AddCategoryFieldForm = ({
                 Listing cannot be published without this field.
               </p>
             </div>
-            <Switch />
+            <Switch
+              checked={isRequired}
+              onCheckedChange={(checked) => setIsRequired(checked)}
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -113,7 +204,10 @@ const AddCategoryFieldForm = ({
                 Show as a search filter on the category page.
               </p>
             </div>
-            <Switch />
+            <Switch
+              checked={isFilterable}
+              onCheckedChange={(checked) => setIsFilterable(checked)}
+            />
           </div>
         </div>
       </div>
@@ -128,8 +222,13 @@ const AddCategoryFieldForm = ({
         >
           Cancel
         </Button>
-        <Button type="button" onClick={onSuccess} className="cursor-pointer">
-          Save Field
+        <Button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isLoading}
+          className="cursor-pointer"
+        >
+          {isLoading ? "Saving..." : "Save Field"}
         </Button>
       </div>
     </div>
