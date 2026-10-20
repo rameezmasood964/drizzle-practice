@@ -1,5 +1,7 @@
 import CategoryFields from "@/modules/categories/components/admin/CategoryFields";
 import { getCategoryById } from "@/modules/categories/queries";
+import { getCategoryFields } from "@/modules/categories/queries";
+import { getCategoryFieldsWithInheritance } from "@/modules/categories/queries";
 import { notFound } from "next/navigation";
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -17,6 +19,7 @@ const Page = async ({ params }: PageProps) => {
 
   // 2. Database se is category ka record le kar aayein
   const category = await getCategoryById(categoryId);
+  const categoryField = await getCategoryFieldsWithInheritance(categoryId);
 
   // Agar category exist nahi karti to 404
   if (!category) {
@@ -25,7 +28,11 @@ const Page = async ({ params }: PageProps) => {
 
   return (
     <div className="p-6">
-      <CategoryFields categoryId={category.id} categoryName={category.name} />
+      <CategoryFields
+        categoryId={category.id}
+        categoryName={category.name}
+        initialFields={categoryField}
+      />
     </div>
   );
 };

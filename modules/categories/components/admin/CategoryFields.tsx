@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import {
   Table,
   TableBody,
@@ -30,43 +32,49 @@ import {
 } from "@/components/ui/sheet";
 import { CategoryFieldsProps } from "../../types";
 import AddCategoryFieldForm from "./AddCategoryFieldForm";
+import { deleteField } from "../../actions/fields";
 
 export default function CategoryFields({
   categoryName,
   categoryId,
   initialFields = [],
 }: CategoryFieldsProps) {
+  // all states
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  // 1. Kis field par click hua hai, uska data rakhne ke liye state
+  const [fieldToDelete, setFieldToDelete] = useState<{
+    id: number;
+    label: string;
+  } | null>(null);
 
-  const fields =
-    initialFields.length > 0
-      ? initialFields
-      : [
-          {
-            id: 1,
-            label: "Consultation Fee",
-            key: "consultation_fee",
-            type: "number",
-            isRequired: true,
-            isFilterable: true,
-          },
-          {
-            id: 2,
-            label: "Specialization",
-            key: "specialization",
-            type: "select",
-            isRequired: true,
-            isFilterable: true,
-          },
-          {
-            id: 3,
-            label: "PMDC Registration No",
-            key: "pmdc_no",
-            type: "text",
-            isRequired: false,
-            isFilterable: false,
-          },
-        ];
+  const fields = initialFields;
+
+  // 2. Trash button click hone par dialog kholne ka chhota function
+  const openDeleteModal = (id: number, label: string) => {
+    setFieldToDelete({ id, label });
+  };
+
+  const handleConfirmDelete = async () => {
+    // Confirm popup
+    if (!fieldToDelete) return;
+
+    const targetId = fieldToDelete.id;
+    setDeletingId(targetId);
+    try {
+      const response = await deleteField(targetId,Number(categoryId));
+      if (response.success) {
+        toast.success(response.message || "Field delete ho gayi");
+      } else {
+        toast.error(response.error || "Delete fail ho gaya");
+      }
+    } catch (error) {
+      toast.error("Kuch ghalat ho gaya");
+    } finally {
+      setDeletingId(null);
+      setFieldToDelete(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -155,71 +163,94 @@ export default function CategoryFields({
                   </TableCell>
                 </TableRow>
               ) : (
-                fields.map((f) => (
-                  <TableRow
-                    key={f.id}
-                    className="hover:bg-muted/50 transition-colors"
-                  >
-                    <TableCell className="p-4 font-medium text-foreground">
-                      {f.label}
-                    </TableCell>
+                fields.map((f) => {
+                  const isInherited = f.categoryId !== Number(categoryId);
 
-                    <TableCell className="p-4">
-                      <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono text-muted-foreground">
-                        {f.key}
-                      </code>
-                    </TableCell>
+                  return (
+                    <TableRow
+                      key={f.id}
+                      className="hover:bg-muted/50 transition-colors"
+                    >
+                      <TableCell className="p-4 font-medium text-foreground">
+                        {f.label}
+                      </TableCell>
 
-                    <TableCell className="p-4">
-                      <Badge variant="outline" className="capitalize text-xs">
-                        {f.type}
-                      </Badge>
-                    </TableCell>
+                      <TableCell className="p-4">
+                        <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono text-muted-foreground">
+                          {f.key}
+                        </code>
+                      </TableCell>
 
-                    <TableCell className="p-4">
-                      {f.isRequired ? (
-                        <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Yes
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <XCircle className="h-3.5 w-3.5 opacity-50" />
-                          No
-                        </span>
-                      )}
-                    </TableCell>
+                      <TableCell className="p-4">
+                        <Badge variant="outline" className="capitalize text-xs">
+                          {f.type}
+                        </Badge>
+                      </TableCell>
 
-                    <TableCell className="p-4">
-                      {f.isFilterable ? (
-                        <span className="flex items-center gap-1.5 text-xs text-primary font-medium">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Yes
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <XCircle className="h-3.5 w-3.5 opacity-50" />
-                          No
-                        </span>
-                      )}
-                    </TableCell>
+                      <TableCell className="p-4">
+                        {f.isRequired ? (
+                          <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Yes
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <XCircle className="h-3.5 w-3.5 opacity-50" />
+                            No
+                          </span>
+                        )}
+                      </TableCell>
 
-                    <TableCell className="p-4 text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive cursor-pointer"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      <TableCell className="p-4">
+                        {f.isFilterable ? (
+                          <span className="flex items-center gap-1.5 text-xs text-primary font-medium">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Yes
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <XCircle className="h-3.5 w-3.5 opacity-50" />
+                            No
+                          </span>
+                        )}
+                      </TableCell>
+
+                      <TableCell className="p-4 text-right">
+                        {isInherited ? (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] text-muted-foreground"
+                          >
+                            Inherited
+                          </Badge>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={deletingId === f.id}
+                            onClick={() => openDeleteModal(f.id, f.label)}
+                            className="h-8 w-8 text-destructive hover:text-destructive cursor-pointer"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!fieldToDelete}
+        onOpenChange={(open) => !open && setFieldToDelete(null)}
+        description={`Kya aap waqai "${fieldToDelete?.label}" field ko delete karna chahte hain? Yeh field listings ke form se hata di jayegi.`}
+        isLoading={deletingId !== null}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { z } from "zod";
 import { categoryFields } from "@/app/db/schema";
+import { and, eq } from "drizzle-orm";
 
 // now we making zod schema for our categories field
 
@@ -53,6 +54,44 @@ export async function createCategoriesField(input: myCustom) {
 
     const data = result.data;
 
+    // 1. Check karein ke kya yeh key is category mein pehle se moojood hai
+    const existingField = await db.query.categoryFields.findFirst({
+      where: and(
+        eq(categoryFields.categoryId, data.categoryId),
+        eq(categoryFields.key, data.key),
+      ),
+    });
+
+    // Case A: Field pehle se moojood hai aur abhi active bhi hai -> Real Duplicate Error
+    if (existingField && existingField.isActive) {
+      return {
+        success: false,
+        error: "Yeh Field Key pehle se is category mein moojood hai.",
+      };
+    }
+
+    // Case B: Field pehle bani thi lekin delete (isActive = false) ho chuki thi -> Wapis Restore Karein
+    if (existingField && !existingField.isActive) {
+      await db
+        .update(categoryFields)
+        .set({
+          label: data.label.trim(),
+          type: data.type,
+          isRequired: data.isRequired,
+          isFilterable: data.isFilterable,
+          options:
+            data.options && data.options.length > 0 ? data.options : null,
+          placeholder: data.placeholder?.trim() || null,
+          helpText: data.helpText?.trim() || null,
+          isActive: true, // 👈 Zinda kar diya
+        })
+        .where(eq(categoryFields.id, existingField.id));
+
+      revalidatePath(`/admin/categories/${data.categoryId}/fields`);
+      return { success: true, message: "Field kamyabi se add ho gayi!" };
+    }
+
+    // Case C: Bilkul fresh field hai -> Normal Insert karein
     await db.insert(categoryFields).values({
       categoryId: data.categoryId,
       key: data.key,
@@ -67,10 +106,9 @@ export async function createCategoriesField(input: myCustom) {
       isActive: true,
     });
 
-    // / Cache refresh taake UI update ho
     revalidatePath(`/admin/categories/${data.categoryId}/fields`);
 
-    return { success: true, message: "Field Add SucsessFully" };
+    return { success: true, message: "Field Add Successfully" };
   } catch (error: any) {
     console.error("Failed to create category field:", error);
 
@@ -96,6 +134,46 @@ export async function createCategoriesField(input: myCustom) {
     return {
       success: false,
       error: "Field save nahi ho saki. Dobara koshish karein.",
+    };
+  }
+}
+
+// delete function
+
+export async function deleteField(fieldId: number, categoryId: number) {
+  try {
+    const existingField = await db.query.categoryFields.findFirst({
+      where: and(
+        eq(categoryFields.id, fieldId),
+        eq(categoryFields.categoryId, categoryId),
+      ),
+    });
+
+    if (!existingField) {
+      return {
+        success: false,
+        error:
+          "Field nahi mili ya aapke paas isay delete karne ki ijazat nahi hai.",
+      };
+    }
+
+    await db
+      .update(categoryFields)
+      .set({
+        isActive: false,
+      })
+      .where(eq(categoryFields.id, fieldId));
+    revalidatePath(`/admin/categories/${categoryId}/fields`);
+
+    return {
+      success: true,
+      message: "Field kamyabi se delete ho gayi.",
+    };
+  } catch (error) {
+    console.error("Delete field error:", error);
+    return {
+      success: false,
+      error: "Field delete nahi ho saki. Dobara koshish karein.",
     };
   }
 }
