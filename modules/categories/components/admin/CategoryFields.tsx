@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   CheckCircle2,
   XCircle,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,9 @@ export default function CategoryFields({
     label: string;
   } | null>(null);
 
+  // Edit drawer ke liye state
+  const [fieldToEdit, setFieldToEdit] = useState<any | null>(null);
+
   const fields = initialFields;
 
   // 2. Trash button click hone par dialog kholne ka chhota function
@@ -62,7 +66,7 @@ export default function CategoryFields({
     const targetId = fieldToDelete.id;
     setDeletingId(targetId);
     try {
-      const response = await deleteField(targetId,Number(categoryId));
+      const response = await deleteField(targetId, Number(categoryId));
       if (response.success) {
         toast.success(response.message || "Field delete ho gayi");
       } else {
@@ -107,9 +111,18 @@ export default function CategoryFields({
         </div>
 
         {/* Add Field Sheet Trigger (Side Drawer) */}
-        <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <Sheet
+          open={isAddOpen}
+          onOpenChange={(open) => {
+            setIsAddOpen(open);
+            if (!open) setFieldToEdit(null);
+          }}
+        >
           <SheetTrigger asChild>
-            <Button className="cursor-pointer gap-2">
+            <Button
+              className="cursor-pointer gap-2"
+              onClick={() => setFieldToEdit(null)}
+            >
               <Plus className="h-4 w-4" />
               Add Field
             </Button>
@@ -117,17 +130,25 @@ export default function CategoryFields({
 
           <SheetContent className="w-full sm:max-w-lg flex flex-col p-0 h-full">
             <SheetHeader className="p-6 pb-4 border-b text-left">
-              <SheetTitle>Add Custom Field</SheetTitle>
+              <SheetTitle>
+                {fieldToEdit ? "Edit Custom Field" : "Add Custom Field"}
+              </SheetTitle>
               <SheetDescription>
-                Create a dynamic field for &quot;{categoryName || "Category"}
-                &quot;.
+                {fieldToEdit
+                  ? `Update settings for "${fieldToEdit.label}".`
+                  : `Create a dynamic field for "${categoryName || "Category"}".`}
               </SheetDescription>
             </SheetHeader>
 
             {/* Form Component */}
             <AddCategoryFieldForm
+              key={fieldToEdit ? fieldToEdit.id : "new"}
               categoryId={categoryId}
-              onSuccess={() => setIsAddOpen(false)}
+              initialData={fieldToEdit}
+              onSuccess={() => {
+                setIsAddOpen(false);
+                setFieldToEdit(null);
+              }}
             />
           </SheetContent>
         </Sheet>
@@ -224,15 +245,31 @@ export default function CategoryFields({
                             Inherited
                           </Badge>
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={deletingId === f.id}
-                            onClick={() => openDeleteModal(f.id, f.label)}
-                            className="h-8 w-8 text-destructive hover:text-destructive cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            {/* 1. Edit Button */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setFieldToEdit(f);
+                                setIsAddOpen(true); // 👈 Same Sheet khol dega!
+                              }}
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+
+                            {/* 2. Trash Button */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={deletingId === f.id}
+                              onClick={() => openDeleteModal(f.id, f.label)}
+                              className="h-8 w-8 text-destructive hover:text-destructive cursor-pointer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>

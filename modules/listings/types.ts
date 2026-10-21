@@ -26,3 +26,15 @@ export interface CategoryFilterOption {
 export interface ListingFiltersProps {
   categories?: CategoryFilterOption[];
 }
+
+export interface ListingsTableProps {
+  listings?: ListingItem[];
+}
+
+
+export interface ListingsDashboardWrapperProps {
+  stats?: ListingStatsProps;
+  listings?: ListingItem[];
+  categories?: CategoryFilterOption[];
+ 
+}

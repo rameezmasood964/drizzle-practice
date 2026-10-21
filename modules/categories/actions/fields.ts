@@ -54,7 +54,9 @@ export async function createCategoriesField(input: myCustom) {
 
     const data = result.data;
 
-    // 1. Check karein ke kya yeh key is category mein pehle se moojood hai
+    //  "Database! Apne table ke categoryFields.categoryId column mein dekho,
+    //  aur sirf wahi rows dhoond kar nikalo jinki ID hamare user ke page wali
+    //  ID data.categoryId (e.g. 4) ke barabar ho."
     const existingField = await db.query.categoryFields.findFirst({
       where: and(
         eq(categoryFields.categoryId, data.categoryId),
@@ -142,6 +144,8 @@ export async function createCategoriesField(input: myCustom) {
 
 export async function deleteField(fieldId: number, categoryId: number) {
   try {
+    // categoryfield databse mein table ha usmein id or jis field pr click kai wo id brabar ho
+    // 2nd categoryfield table mein category id or user jis category pr click kr y aya ha field page wo brabar ho
     const existingField = await db.query.categoryFields.findFirst({
       where: and(
         eq(categoryFields.id, fieldId),
@@ -174,6 +178,86 @@ export async function deleteField(fieldId: number, categoryId: number) {
     return {
       success: false,
       error: "Field delete nahi ho saki. Dobara koshish karein.",
+    };
+  }
+}
+
+const updateCategoryFieldSchema = z.object({
+  label: z.string().min(1, "Field Label zaroori hai").max(100),
+  options: z.array(z.string()).nullable().optional(),
+  placeholder: z.string().nullable().optional(),
+  helpText: z.string().nullable().optional(),
+  isRequired: z.boolean().default(false),
+  isFilterable: z.boolean().default(false),
+});
+
+export type UpdateCategoryFieldInput = z.infer<
+  typeof updateCategoryFieldSchema
+>;
+
+export async function updateCategoryFields(
+  fieldId: number,
+  categoryId: number,
+  input: UpdateCategoryFieldInput,
+) {
+  try {
+    const result = updateCategoryFieldSchema.safeParse(input);
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error.issues[0]?.message || "Validation failed",
+      };
+    }
+
+    // Agar validation pass ho jaye, toh clean data nikaal lein:
+
+    const data = result.data;
+    const exisitingField = await db.query.categoryFields.findFirst({
+      where: and(
+        eq(categoryFields.id, fieldId),
+        eq(categoryFields.categoryId, categoryId),
+      ),
+    });
+
+    if(!exisitingField){
+      return{
+        success : false,
+        error : "ap is field ko edit ni krskty"
+
+      }
+    }
+
+    // Jab tasdeeq ho jaye ke field moojood hai aur isi category ki apni hai:
+
+    await db
+  .update(categoryFields)
+  .set({
+    label: data.label.trim(),
+    placeholder: data.placeholder?.trim() || null,
+    helpText: data.helpText?.trim() || null,
+    options: data.options && data.options.length > 0 ? data.options : null,
+    isRequired: data.isRequired,
+    isFilterable: data.isFilterable,
+  })
+  .where(eq(categoryFields.id, fieldId));
+
+// Cache refresh karein taake table par taza data dikhe
+revalidatePath(`/admin/categories/${categoryId}/fields`);
+
+return {
+  success: true,
+  message: "Field kamyabi se update ho gayi.",
+};
+
+
+
+
+  }
+  catch (error) {
+    console.error("Update field error:", error);
+    return {
+      success: false,
+      error: "Field update nahi ho saki. Dobara koshish karein.",
     };
   }
 }

@@ -31,11 +31,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-import type { ListingItem } from "../../types";
+import { ListingsTableProps } from "@/modules/listings/types";
 
-interface ListingsTableProps {
-  data?: ListingItem[];
-}
+
 
 // Status ke semantic variants ke liye mapping
 const getStatusBadgeVariant = (
@@ -53,7 +51,7 @@ const getStatusBadgeVariant = (
   }
 };
 
-const ListingsTable = ({ data = [] }: ListingsTableProps) => {
+const ListingsTable = ({ listings = [] }: ListingsTableProps) => {
   return (
     <div className="rounded-md border border-border bg-card">
       <Table>
@@ -85,7 +83,7 @@ const ListingsTable = ({ data = [] }: ListingsTableProps) => {
         </TableHeader>
 
         <TableBody>
-          {data.length === 0 ? (
+          {listings.length === 0 ? (
             <TableRow>
               <TableCell
                 colSpan={7}
@@ -95,7 +93,7 @@ const ListingsTable = ({ data = [] }: ListingsTableProps) => {
               </TableCell>
             </TableRow>
           ) : (
-            data.map((item) => (
+            listings.map((item) => (
               <TableRow key={item.id} className="hover:bg-muted/50">
                 {/* 1. Row Checkbox */}
                 <TableCell className="px-4">

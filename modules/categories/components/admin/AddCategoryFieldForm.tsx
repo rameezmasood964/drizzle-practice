@@ -13,27 +13,43 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { createCategoriesField } from "../../actions/fields";
+import {
+  createCategoriesField,
+  updateCategoryFields,
+} from "../../actions/fields";
 
 interface AddCategoryFieldFormProps {
   categoryId: string | number;
   onSuccess: () => void;
+  initialData?: any;
 }
 
 const AddCategoryFieldForm = ({
   categoryId,
   onSuccess,
+  initialData,
 }: AddCategoryFieldFormProps) => {
   // all states
-  const [fieldType, setFieldType] = useState("text");
-  const [label, setLabel] = useState("");
-  const [key, setKey] = useState("");
-  const [options, setOptions] = useState("");
-  const [placeholder, setPlaceholder] = useState("");
-  const [helpText, setHelpText] = useState("");
-  const [isRequired, setIsRequired] = useState(false);
-  const [isFilterable, setIsFilterable] = useState(false);
+  // all states (pre-filled with initialData if editing)
+  const [fieldType, setFieldType] = useState(initialData?.type || "text");
+  const [label, setLabel] = useState(initialData?.label || "");
+  const [key, setKey] = useState(initialData?.key || "");
+  const [options, setOptions] = useState(
+    initialData?.options ? initialData.options.join(", ") : "",
+  );
+  const [placeholder, setPlaceholder] = useState(
+    initialData?.placeholder || "",
+  );
+  const [helpText, setHelpText] = useState(initialData?.helpText || "");
+  const [isRequired, setIsRequired] = useState(
+    Boolean(initialData?.isRequired),
+  );
+  const [isFilterable, setIsFilterable] = useState(
+    Boolean(initialData?.isFilterable),
+  );
   const [isLoading, setIsLoading] = useState(false);
+
+  const isEditMode = Boolean(initialData);
 
   const generateKey = (text: string) => {
     return text
@@ -52,33 +68,53 @@ const AddCategoryFieldForm = ({
         fieldType === "select" || fieldType === "multiselect"
           ? options
               .split(",")
-              .map((item) => item.trim())
+              .map((item: any) => item.trim())
               .filter(Boolean)
           : null;
 
-      // Payload Packet
-      // Payload ka matlab hota hai
-      //  "Woh saara data jo hum aik dabbe (object) mein pack karke Server Action ko bhejte hain."
+      let response;
 
-      const payload = {
-        categoryId: Number(categoryId),
-        label: label.trim(),
-        key: key.trim(),
-        type: fieldType as any,
-        options: optionsArray,
-        placeholder: placeholder.trim() || null,
-        helpText: helpText.trim() || null,
-        isRequired,
-        isFilterable,
-      };
+      if (isEditMode) {
+        // --- 1. EDIT MODE: Sirf editable fields ka payload ---
+        const updatePayload = {
+          label: label.trim(),
+          options: optionsArray,
+          placeholder: placeholder.trim() || null,
+          helpText: helpText.trim() || null,
+          isRequired,
+          isFilterable,
+        };
 
-      // abh is payload ko hm serveraction tk bhejy gy
+        response = await updateCategoryFields(
+          Number(initialData.id),
+          Number(categoryId),
+          updatePayload,
+        );
+      } else {
+        const createPayload = {
+          categoryId: Number(categoryId),
+          label: label.trim(),
+          key: key.trim(),
+          type: fieldType as any,
+          options: optionsArray,
+          placeholder: placeholder.trim() || null,
+          helpText: helpText.trim() || null,
+          isRequired,
+          isFilterable,
+        };
 
-      const response = await createCategoriesField(payload);
+        response = await createCategoriesField(createPayload);
+      }
+
       // 👇 Yeh console lagayein:
       console.log("category field ka server action pr response", response);
       if (response.success) {
-        toast.success(response.message || "Custom field added successfully!");
+        toast.success(
+          response.message ||
+            (isEditMode
+              ? "Field updated successfully!"
+              : "Custom field added successfully!"),
+        );
         onSuccess();
       } else {
         toast.error(response.error || "Failed to add field");
@@ -105,7 +141,10 @@ const AddCategoryFieldForm = ({
             onChange={(e) => {
               const val = e.target.value;
               setLabel(val);
-              setKey(generateKey(val)); // 👈 Yahan key auto-generate ho rahi hai
+              if (!isEditMode) {
+                setKey(generateKey(val));
+              }
+              // 👈 Yahan key auto-generate ho rahi hai
             }}
           />
         </div>
@@ -118,6 +157,7 @@ const AddCategoryFieldForm = ({
             placeholder="e.g. consultation_fee"
             className="font-mono text-sm"
             value={key}
+            disabled={isEditMode}
             onChange={(e) => setKey(e.target.value)}
           />
           <p className="text-[11px] text-muted-foreground">
@@ -128,7 +168,11 @@ const AddCategoryFieldForm = ({
         {/* Field Type Selector */}
         <div className="space-y-1.5">
           <Label>Field Type</Label>
-          <Select value={fieldType} onValueChange={setFieldType}>
+          <Select
+            value={fieldType}
+            onValueChange={setFieldType}
+            disabled={isEditMode}
+          >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
@@ -228,7 +272,7 @@ const AddCategoryFieldForm = ({
           disabled={isLoading}
           className="cursor-pointer"
         >
-          {isLoading ? "Saving..." : "Save Field"}
+          {isLoading ? "Saving..." : isEditMode ? "Update Field" : "Save Field"}
         </Button>
       </div>
     </div>

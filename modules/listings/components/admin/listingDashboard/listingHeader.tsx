@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { ListingHeaderProps } from "../../types";
+import { ListingHeaderProps } from "@/modules/listings/types";
 
 const ListingHeader = ({
   title = "Listings",

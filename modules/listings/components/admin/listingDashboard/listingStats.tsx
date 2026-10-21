@@ -1,6 +1,6 @@
 import { FileText, CheckCircle2, Clock, FileEdit, Ban } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import type { ListingStatsProps } from "../../types";
+import { ListingStatsProps } from "@/modules/listings/types";
 
 const ListingStats = ({
   total = 0,
