@@ -448,3 +448,48 @@ export async function deleteCategory(id: string) {
     return { success: false, message: "Failed to delete category." };
   }
 }
+
+
+/* ----------------------------- DELETE (SOFT DELETE) AREA ----------------------------- */
+export async function deleteArea(id: string | number) {
+  const areaId = typeof id === "string" ? parseInt(id, 10) : id;
+
+  if (isNaN(areaId)) {
+    return {
+      success: false,
+      message: "Invalid Area ID.",
+    };
+  }
+
+  try {
+    // Database se delete nahi karna, bas isActive ko false karna hai
+    const updated = await db
+      .update(areas)
+      .set({
+        isActive: false,
+      })
+      .where(eq(areas.id, areaId))
+      .returning({ id: areas.id });
+
+    if (updated.length === 0) {
+      return {
+        success: false,
+        message: "Area not found or already deleted.",
+      };
+    }
+
+    revalidatePath("/admin/areas");
+    return {
+      success: true,
+      message: "Area deactivated successfully!",
+    };
+  } catch (error: any) {
+    if (isRedirectError(error)) throw error;
+
+    console.error("DELETE AREA ERROR:", error);
+    return {
+      success: false,
+      message: "Failed to delete area. Please try again.",
+    };
+  }
+}

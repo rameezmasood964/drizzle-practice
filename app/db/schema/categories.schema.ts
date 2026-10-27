@@ -163,6 +163,48 @@ export const categoryFields = pgTable(
   ],
 );
 
+
+
+
+/* ------------------------------------------------------------------ */
+/* Areas (Bahawalpur ke mohalle / towns)                               */
+/* ------------------------------------------------------------------ */
+
+export const areas = pgTable(
+  "areas",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(), // jaise "Model Town"
+    slug: text("slug").notNull().unique(), // jaise "model-town"
+    sortOrder: integer("sort_order").default(0).notNull(),
+    // delete mat karo, is ko false kar do (listings bach jati hain)
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [uniqueIndex("areas_name_lower_unique").on(sql`lower(${t.name})`)],
+);
+
+
+/* ------------------------------------------------------------------ */
+/* Listing images                                                      */
+/* ------------------------------------------------------------------ */
+
+export const listingImages = pgTable(
+  "listing_images",
+  {
+    id: serial("id").primaryKey(),
+    listingId: integer("listing_id")
+      .references(() => listings.id, { onDelete: "cascade" })
+      .notNull(),
+    imageUrl: text("image_url").notNull(),
+    isPrimary: boolean("is_primary").default(false).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+  },
+  (t) => [index("listing_images_listing_idx").on(t.listingId)],
+);
+
 /* ------------------------------------------------------------------ */
 /* Listings                                                            */
 /* ------------------------------------------------------------------ */
@@ -179,7 +221,9 @@ export const listings = pgTable(
     phone: text("phone").notNull(),
     whatsapp: text("whatsapp"),
     address: text("address").notNull(),
-    area: text("area"), // jaise "Model Town", "Satellite Town"
+  areaId: integer("area_id")
+  .references(() => areas.id, { onDelete: "restrict" })
+  .notNull(),
     latitude: doublePrecision("latitude"),
     longitude: doublePrecision("longitude"),
 
@@ -227,28 +271,13 @@ export const listings = pgTable(
     index("listings_owner_idx").on(t.ownerId),
     // JSONB ke andar filter tez karne ke liye
     index("listings_details_gin").using("gin", t.details),
+     index("listings_area_idx").on(t.areaId),
   ],
 );
 
-/* ------------------------------------------------------------------ */
-/* Listing images                                                      */
-/* ------------------------------------------------------------------ */
-
-export const listingImages = pgTable(
-  "listing_images",
-  {
-    id: serial("id").primaryKey(),
-    listingId: integer("listing_id")
-      .references(() => listings.id, { onDelete: "cascade" })
-      .notNull(),
-    imageUrl: text("image_url").notNull(),
-    isPrimary: boolean("is_primary").default(false).notNull(),
-    sortOrder: integer("sort_order").default(0).notNull(),
-  },
-  (t) => [index("listing_images_listing_idx").on(t.listingId)],
-);
 
 export type Category = typeof categories.$inferSelect;
 export type CategoryField = typeof categoryFields.$inferSelect;
 export type Listing = typeof listings.$inferSelect;
 export type NewListing = typeof listings.$inferInsert;
+export type Area = typeof areas.$inferSelect;

@@ -327,6 +327,7 @@ const CategoryForm = ({
   const actionToRun = isEditing ? updatecategory : addcategory;
 
   const formattedCategories = formatCategoryTree(categories);
+  
   const [state, formAction, isPending] = useActionState(
     actionToRun as any,
     null,
