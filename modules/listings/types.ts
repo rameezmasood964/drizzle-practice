@@ -2,7 +2,7 @@ import { getListings } from "./queries";
 import { listingFormSchema } from "./schema";
 import { z } from "zod";
 
-// getListings query ke return hone wale data se automatic type banti hai
+// getListings query ke return hone wale data se automatic type
 export type ListingItem = NonNullable<
   Awaited<ReturnType<typeof getListings>>["data"]
 >[number];
@@ -39,7 +39,9 @@ export interface ListingsDashboardWrapperProps {
   categories?: CategoryFilterOption[];
 }
 
-// lisiting form all types
+// ==========================================
+// Listing Form Specific Types
+// ==========================================
 
 // 1. Business Hours Types
 export type DayOfWeek =
@@ -53,8 +55,8 @@ export type DayOfWeek =
 
 export interface DaySchedule {
   isOpen: boolean;
-  openTime: string; // e.g., "09:00 AM"
-  closeTime: string; // e.g., "10:00 PM"
+  openTime: string;
+  closeTime: string;
 }
 
 export type BusinessHours = Record<DayOfWeek, DaySchedule>;
@@ -66,17 +68,17 @@ export interface ListingMedia {
   id: string;
   url: string;
   isCover: boolean;
-  file?: File; // Agar user ne fresh upload kiya ho
+  file?: File;
 }
 
-// 3. Dynamic Custom Fields Types (EAV / JSONB payload)
+// 3. Dynamic Custom Fields Types
 export type CustomFieldValue = string | number | boolean | string[];
 
 export interface DynamicCustomFields {
   [key: string]: CustomFieldValue;
 }
 
-// 4. Category & Subcategory Schema Types
+// 4. Category & Subcategory Types
 export interface SubCategory {
   id: string;
   name: string;
@@ -90,5 +92,24 @@ export interface Category {
   slug: string;
   subCategories?: SubCategory[];
 }
-// Ab manual 20 lines likhne ke bajaye direct schema se infer ho gaya
-export type ListingFormData = z.infer<typeof listingFormSchema>;
+
+// 5. Area Option (Areas table se fetch hone wale active records)
+export interface AreaOption {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+// 6. Form Values Type (Central Single Source of Truth from Zod)
+export type ListingFormValues = z.infer<typeof listingFormSchema>;
+export type ListingFormData = ListingFormValues;
+
+// 7. Component Props
+export interface AddListingFormProps {
+  areas: AreaOption[];
+  categories?: Category[];
+}
+
+export interface LocationSectionProps {
+  areas: AreaOption[];
+}

@@ -1,12 +1,18 @@
 "use client";
 
 import { Phone } from "lucide-react";
+import { useFormContext } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
+import type { ListingFormValues } from "@/modules/listings/types";
 
 const ContactSection = () => {
+  const {
+    register,
+    formState: { errors },
+  } = useFormContext<ListingFormValues>();
+
   return (
     <Card className="border-border bg-card shadow-sm">
       {/* Section Header */}
@@ -28,22 +34,30 @@ const ContactSection = () => {
             <Input
               id="phone"
               type="tel"
+              {...register("phone")}
               placeholder="03001234567"
-              className="bg-background"
+              className={`bg-background ${errors.phone ? "border-destructive focus-visible:ring-destructive" : ""}`}
             />
+            {errors.phone && (
+              <p className="text-xs text-destructive">{errors.phone.message}</p>
+            )}
           </div>
 
           {/* WhatsApp Number */}
           <div className="space-y-1.5">
             <Label htmlFor="whatsapp" className="text-sm font-medium">
-              WhatsApp Number
+              WhatsApp Number <span className="text-destructive">*</span>
             </Label>
             <Input
               id="whatsapp"
               type="tel"
+              {...register("whatsapp")}
               placeholder="+92 300 1234567"
-              className="bg-background"
+              className={`bg-background ${errors.whatsapp ? "border-destructive focus-visible:ring-destructive" : ""}`}
             />
+            {errors.whatsapp && (
+              <p className="text-xs text-destructive">{errors.whatsapp.message}</p>
+            )}
           </div>
         </div>
 
@@ -52,14 +66,18 @@ const ContactSection = () => {
           {/* Email */}
           <div className="space-y-1.5">
             <Label htmlFor="email" className="text-sm font-medium">
-              Email
+              Email <span className="text-xs text-muted-foreground">(optional)</span>
             </Label>
             <Input
               id="email"
               type="email"
+              {...register("email")}
               placeholder="info@business.com"
-              className="bg-background"
+              className={`bg-background ${errors.email ? "border-destructive focus-visible:ring-destructive" : ""}`}
             />
+            {errors.email && (
+              <p className="text-xs text-destructive">{errors.email.message}</p>
+            )}
           </div>
 
           {/* Website */}
@@ -70,14 +88,18 @@ const ContactSection = () => {
             <Input
               id="website"
               type="url"
+              {...register("website")}
               placeholder="https://www.example.com"
-              className="bg-background"
+              className={`bg-background ${errors.website ? "border-destructive focus-visible:ring-destructive" : ""}`}
             />
+            {errors.website && (
+              <p className="text-xs text-destructive">{errors.website.message}</p>
+            )}
           </div>
         </div>
       </CardContent>
     </Card>
   );
-}
+};
 
-export default ContactSection
+export default ContactSection;

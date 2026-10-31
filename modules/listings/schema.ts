@@ -4,7 +4,7 @@ import {
   ALLOWED_IMAGE_TYPES,
   MIN_LISTING_IMAGES,
   MAX_LISTING_IMAGES,
-} from "@/utils/constants"; // Apni constants file ka correct path
+} from "@/utils/constants";
 
 // 1. Business Hours Schema
 export const dayScheduleSchema = z.object({
@@ -33,7 +33,6 @@ export const listingMediaItemSchema = z
   })
   .superRefine((data, ctx) => {
     if (data.file && data.file instanceof File) {
-      // Empty check
       if (data.file.size === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -43,7 +42,6 @@ export const listingMediaItemSchema = z
         return;
       }
 
-      // Max size check (Fixed typo here)
       if (data.file.size > MAX_FILE_SIZE) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -52,7 +50,6 @@ export const listingMediaItemSchema = z
         });
       }
 
-      // Allowed MIME types check
       if (!ALLOWED_IMAGE_TYPES.includes(data.file.type)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -68,11 +65,11 @@ export const listingImagesSchema = z
   .array(listingMediaItemSchema)
   .min(
     MIN_LISTING_IMAGES,
-    `Please upload at least ${MIN_LISTING_IMAGES} image for the listing.`
+    `Kam az kam ${MIN_LISTING_IMAGES} image upload karna zaroori hai.`,
   )
   .max(
     MAX_LISTING_IMAGES,
-    `You can upload a maximum of ${MAX_LISTING_IMAGES} images.`
+    `Aap maximum ${MAX_LISTING_IMAGES} images upload kar sakte hain.`,
   );
 
 // 4. Main Listing Form Schema
@@ -80,40 +77,57 @@ export const listingFormSchema = z.object({
   // Basic Info Section
   title: z
     .string()
-    .min(3, "Title must be at least 3 characters long")
-    .max(120, "Title cannot exceed 120 characters"),
-  tagline: z.string().max(160, "Tagline cannot exceed 160 characters").optional(),
+    .min(3, "Title kam az kam 3 characters ka hona chahiye")
+    .max(120, "Title 120 characters se zyada nahi ho sakta"),
+  slug: z
+    .string()
+    .min(3, "Slug zaroori hai")
+    .regex(
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      "Slug URL friendly hona chahiye (lowercase, numbers aur hyphens)",
+    ),
   description: z
     .string()
-    .min(20, "Description must be at least 20 characters long"),
+    .min(20, "Description kam az kam 20 characters ki honi chahiye"),
 
   // Contact Section
   phone: z
     .string()
-    .min(7, "Valid phone number is required")
+    .min(10, "Valid phone number zaroori hai")
     .regex(/^[+0-9\s\-()]+$/, "Invalid phone number format"),
   whatsapp: z
     .string()
-    .regex(/^[+0-9\s\-()]*$/, "Invalid WhatsApp number format")
-    .optional(),
-  email: z.string().email("Invalid email address"),
+    .min(10, "WhatsApp number likhna zaroori hai")
+    .regex(/^[+0-9\s\-()]+$/, "Invalid WhatsApp number format"),
+  email: z
+    .string()
+    .email("Valid email address likhein")
+    .optional()
+    .or(z.literal("")),
   website: z
     .string()
-    .url("Invalid website URL")
+    .url("Valid website URL likhein")
     .optional()
     .or(z.literal("")),
 
   // Location Section
-  address: z.string().min(5, "Full address is required"),
-  city: z.string().min(2, "City is required"),
-  state: z.string().optional(),
-  postalCode: z.string().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
+  areaId: z
+    .number({
+      message: "Area select karna zaroori hai",
+    })
+    .positive("Area select karna zaroori hai"),
+  address: z.string().min(5, "Pura address likhna zaroori hai"),
+  landmark: z.string().optional().or(z.literal("")),
+  mapsUrl: z
+    .string({ message: "Google Maps link likhna zaroori hai" })
+    .min(1, "Google Maps link likhna zaroori hai")
+    .url("Valid Google Maps link (URL) enter karein"),
+  state: z.string().default("Punjab"),
+  postalCode: z.string().default("63100"),
 
   // Category Section
-  categoryId: z.string().min(1, "Please select a category"),
-  subCategoryId: z.string().min(1, "Please select a specific sub-category"),
+  categoryId: z.string().min(1, "Category select karein"),
+  subCategoryId: z.string().min(1, "Sub-category select karein"),
 
   // Status & Visibility Section
   status: z.enum(["active", "pending", "draft", "rejected"]).default("active"),
@@ -129,5 +143,5 @@ export const listingFormSchema = z.object({
   businessHours: businessHoursSchema,
 });
 
-// Type infer kar liya form values ke liye
+// Inferred TypeScript Type
 export type ListingFormValues = z.infer<typeof listingFormSchema>;

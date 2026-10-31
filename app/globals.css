@@ -128,3 +128,11 @@
     @apply font-sans;
   }
 }
+
+
+/* Leaflet map ke tiles Tailwind se na dabein */
+.leaflet-container img,
+.leaflet-container .leaflet-tile {
+  max-width: none !important;
+  max-height: none !important;
+}

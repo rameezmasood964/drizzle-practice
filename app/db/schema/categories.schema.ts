@@ -1,60 +1,4 @@
-// import {pgTable,serial,text,integer,timestamp,boolean, jsonb} from 'drizzle-orm/pg-core'
 
-// // categories table
-// export const categoriesTable = pgTable('categories',{
-
-//     category_id: serial('id').primaryKey(),
-//     categoryname: text('categoryname').notNull(),
-//     category_slug: text('slug').notNull().unique(),
-//     createdat: timestamp('ccreatedat').defaultNow().notNull(),
-//     parentid : integer('parent_id').references (() : any => categoriesTable.category_id,{onDelete:'cascade'})
-// })
-
-// export const categoryFieldsTable = pgTable('category_fields', {
-//     field_id: serial('field_id').primaryKey(),
-
-//     // Link with Categories Table
-//     category_id: integer('category_id')
-//         .references(() => categoriesTable.category_id, { onDelete: 'cascade' })
-//         .notNull(),
-
-//     field_key: text('field_key').notNull(),     // e.g., 'metal_type', 'monthly_rent'
-//     field_label: text('field_label').notNull(), // e.g., 'Metal Type', 'Monthly Rent'
-//     field_type: text('field_type').notNull(),   // e.g., 'text', 'number', 'boolean'
-//     is_required: boolean('is_required').default(true).notNull(),
-// });
-
-// // listes table
-
-// export const itemslists = pgTable('itemslists', {
-
-//     list_id: serial('list_id').primaryKey(),
-
-//    title : text('title').notNull(),
-//    phone_no : text('phone_no').notNull(),
-//    address: text('address').notNull(),
-
-//    category_id : integer('category_id').references(() : any => categoriesTable.category_id,{onDelete :'cascade'}).notNull(),
-//    details: jsonb("details").notNull()
-
-// })
-
-// // images table
-
-// export const listingImages = pgTable('listing_images', {
-//     image_id: serial('image_id').primaryKey(),
-
-//     // Kis listing ki tasveer hai? (Master list se link)
-//     list_id: integer('list_id')
-//         .references((): any => itemslists.list_id, { onDelete: 'cascade' })
-//         .notNull(),
-
-//     image_url: text('image_url').notNull(), // Cloudinary ya AWS S3 ka image link
-
-//     // Yeh optional hai, agar aap batana chahein ke yeh main/cover photo hai ya nahi
-//     is_primary: boolean('is_primary').default(false).notNull(),
-//     display_order: integer('display_order').default(0).notNull(),
-// });
 
 import {
   pgTable,
@@ -163,9 +107,6 @@ export const categoryFields = pgTable(
   ],
 );
 
-
-
-
 /* ------------------------------------------------------------------ */
 /* Areas (Bahawalpur ke mohalle / towns)                               */
 /* ------------------------------------------------------------------ */
@@ -185,7 +126,6 @@ export const areas = pgTable(
   },
   (t) => [uniqueIndex("areas_name_lower_unique").on(sql`lower(${t.name})`)],
 );
-
 
 /* ------------------------------------------------------------------ */
 /* Listing images                                                      */
@@ -219,11 +159,21 @@ export const listings = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     phone: text("phone").notNull(),
-    whatsapp: text("whatsapp"),
+    whatsapp: text("whatsapp").notNull(),
+    email: text("email"),
+    website: text("website"),
+    // {"monday": {"isOpen": true, "open": "09:00", "close": "22:00"}, ...}
+    businessHours:
+      jsonb("business_hours").$type<
+        Record<string, { isOpen: boolean; open: string; close: string }>
+      >(),
     address: text("address").notNull(),
-  areaId: integer("area_id")
-  .references(() => areas.id, { onDelete: "restrict" })
-  .notNull(),
+    mapsUrl: text("maps_url").notNull(),
+    landmark: text("landmark"),
+    areaId: integer("area_id")
+      .references(() => areas.id, { onDelete: "restrict" })
+      .notNull(),
+      // Optional: Future maps integration ke liye rakh sakte hain
     latitude: doublePrecision("latitude"),
     longitude: doublePrecision("longitude"),
 
@@ -271,10 +221,9 @@ export const listings = pgTable(
     index("listings_owner_idx").on(t.ownerId),
     // JSONB ke andar filter tez karne ke liye
     index("listings_details_gin").using("gin", t.details),
-     index("listings_area_idx").on(t.areaId),
+    index("listings_area_idx").on(t.areaId),
   ],
 );
-
 
 export type Category = typeof categories.$inferSelect;
 export type CategoryField = typeof categoryFields.$inferSelect;

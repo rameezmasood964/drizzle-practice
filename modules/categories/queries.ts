@@ -90,3 +90,38 @@ export async function getCategoryFieldsWithInheritance(categoryId: number) {
     return [];
   }
 }
+
+
+
+export async function getCategoriesWithSubcategories() {
+  try {
+    // 1. Saari categories database se mangwao
+    const allCategories = await db.query.categories.findMany({
+      where: (categories, { eq }) => eq(categories.isActive, true),
+      orderBy: (categories, { asc }) => [asc(categories.sortOrder)],
+    });
+
+    // 2. Wo nikalo jinka koi parent nahi hai (Main Categories)
+    const parents = allCategories.filter((cat) => !cat.parentId);
+
+    // 3. Har Main Category ke andar uske bachon (Subcategories) ki list daal do
+    const result = parents.map((parent) => ({
+      id: String(parent.id),
+      name: parent.name,
+      slug: parent.slug,
+      subCategories: allCategories
+        .filter((child) => child.parentId === parent.id)
+        .map((child) => ({
+          id: String(child.id),
+          name: child.name,
+          slug: child.slug,
+          categoryId: String(parent.id),
+        })),
+    }));
+
+    return result;
+  } catch (error) {
+    console.error("Failed to fetch categories:", error);
+    return [];
+  }
+}
