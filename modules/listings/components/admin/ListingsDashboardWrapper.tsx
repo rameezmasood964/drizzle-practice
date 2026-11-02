@@ -4,19 +4,24 @@ import ListingFilters from "./listingDashboard/listingFilters";
 import ListingsTable from "./listingDashboard/listingsTable";
 import { ListingsDashboardWrapperProps } from "../../types";
 
+interface ExtendedWrapperProps extends ListingsDashboardWrapperProps {
+  areas?: { id: number | string; name: string }[];
+}
+
 const ListingsDashboardWrapper = ({
   stats,
   listings = [],
   categories = [],
-}: ListingsDashboardWrapperProps) => {
+  areas = [], // 👈 areas receive karein
+  pagination,
+}: ExtendedWrapperProps) => {
   return (
-    <div>
-      <div className="space-y-6">
-        <ListingHeader />
-        <ListingStats {...stats} />
-        <ListingFilters categories={categories} />
-        <ListingsTable listings={listings} />
-      </div>
+    <div className="space-y-6">
+      <ListingHeader />
+      <ListingStats {...stats} />
+      <ListingFilters categories={categories} areas={areas} />{" "}
+      {/* 👈 areas pass karein */}
+      <ListingsTable listings={listings} pagination={pagination} />
     </div>
   );
 };

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { Layers } from "lucide-react";
+import { useEffect, useMemo } from "react";
+import { FolderTree, Lock } from "lucide-react";
 import { useFormContext, Controller } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -12,39 +12,100 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ListingFormValues, Category } from "@/modules/listings/types";
+import type { ListingFormValues } from "@/modules/listings/types";
+
+interface SubCategory {
+  id: string | number;
+  name: string;
+  slug?: string;
+  parentId?: string | number;
+  categoryId?: string | number;
+}
+
+interface Category {
+  id: string | number;
+  name: string;
+  slug?: string;
+  subCategories?: SubCategory[];
+  subcategories?: SubCategory[]; // Dono naming conventions safe handling
+}
 
 interface CategorySectionProps {
   categories?: Category[];
+  isEditing?: boolean;
 }
 
-const CategorySection = ({ categories = [] }: CategorySectionProps) => {
+const CategorySection = ({
+  categories = [],
+  isEditing = false,
+}: CategorySectionProps) => {
   const {
     control,
-    setValue,
     watch,
+    setValue,
+    clearErrors,
     formState: { errors },
   } = useFormContext<ListingFormValues>();
 
   const selectedCategoryId = watch("categoryId");
+  const selectedSubCategoryId = watch("subCategoryId");
 
-  const currentCategory = useMemo(() => {
-    return categories.find((cat) => String(cat.id) === String(selectedCategoryId));
-  }, [categories, selectedCategoryId]);
+  // Selected parent category ke subCategories nikaalna (safe check for both keys)
+  const availableSubCategories = useMemo(() => {
+    if (!selectedCategoryId) return [];
+    const parent = categories.find(
+      (c) => String(c.id) === String(selectedCategoryId),
+    );
+    return parent?.subCategories || parent?.subcategories || [];
+  }, [selectedCategoryId, categories]);
 
-  const subCategories = currentCategory?.subCategories || [];
+  const hasSubCategories = availableSubCategories.length > 0;
+
+  // Sirf aur sirf CREATE mode mein auto-clear chalega
+  useEffect(() => {
+    if (isEditing) return;
+
+    if (selectedCategoryId) {
+      if (!hasSubCategories) {
+        setValue("subCategoryId", "");
+        clearErrors("subCategoryId");
+      } else {
+        const exists = availableSubCategories.some(
+          (sub) => String(sub.id) === String(selectedSubCategoryId),
+        );
+        if (!exists && selectedSubCategoryId) {
+          setValue("subCategoryId", "");
+        }
+      }
+    }
+  }, [
+    isEditing,
+    selectedCategoryId,
+    hasSubCategories,
+    availableSubCategories,
+    selectedSubCategoryId,
+    setValue,
+    clearErrors,
+  ]);
 
   return (
     <Card className="border-border bg-card shadow-sm">
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2 text-base font-semibold text-foreground">
-          <Layers className="h-4 w-4 text-primary" />
-          Category
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <FolderTree className="h-4 w-4 text-primary" />
+            Category
+          </CardTitle>
+          {isEditing && (
+            <span className="flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              <Lock className="h-3 w-3" /> Locked
+            </span>
+          )}
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Main Category */}
+        {/* 1. Main Category */}
         <div className="space-y-1.5">
           <Label htmlFor="categoryId" className="text-sm font-medium">
             Category <span className="text-destructive">*</span>
@@ -56,41 +117,47 @@ const CategorySection = ({ categories = [] }: CategorySectionProps) => {
               <Select
                 value={field.value ? String(field.value) : ""}
                 onValueChange={(val) => {
-                  field.onChange(val);
-                  setValue("subCategoryId", "", { shouldValidate: true });
+                  if (!isEditing) {
+                    field.onChange(val);
+                  }
                 }}
+                disabled={isEditing}
               >
                 <SelectTrigger
                   id="categoryId"
-                  className={`bg-background ${errors.categoryId ? "border-destructive focus:ring-destructive" : ""}`}
+                  disabled={isEditing}
+                  className={`bg-background ${
+                    isEditing ? "pointer-events-none cursor-not-allowed bg-muted/60 opacity-80" : ""
+                  } ${
+                    errors.categoryId
+                      ? "border-destructive ring-1 ring-destructive"
+                      : ""
+                  }`}
                 >
-                  <SelectValue placeholder="Select a category" />
+                  <SelectValue placeholder="Select Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.length > 0 ? (
-                    categories.map((category) => (
-                      <SelectItem key={category.id} value={String(category.id)}>
-                        {category.name}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="none" disabled>
-                      No categories available
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={String(cat.id)}>
+                      {cat.name}
                     </SelectItem>
-                  )}
+                  ))}
                 </SelectContent>
               </Select>
             )}
           />
           {errors.categoryId && (
-            <p className="text-xs text-destructive">{errors.categoryId.message}</p>
+            <p className="text-xs text-destructive">
+              {errors.categoryId.message}
+            </p>
           )}
         </div>
 
-        {/* Sub-category */}
+        {/* 2. Sub-category */}
         <div className="space-y-1.5">
           <Label htmlFor="subCategoryId" className="text-sm font-medium">
-            Sub-category <span className="text-destructive">*</span>
+            Sub-category{" "}
+            {hasSubCategories && <span className="text-destructive">*</span>}
           </Label>
           <Controller
             control={control}
@@ -98,27 +165,36 @@ const CategorySection = ({ categories = [] }: CategorySectionProps) => {
             render={({ field }) => (
               <Select
                 value={field.value ? String(field.value) : ""}
-                onValueChange={field.onChange}
-                disabled={!selectedCategoryId || subCategories.length === 0}
+                onValueChange={(val) => {
+                  if (!isEditing) {
+                    field.onChange(val);
+                  }
+                }}
+                disabled={isEditing || !selectedCategoryId || !hasSubCategories}
               >
                 <SelectTrigger
                   id="subCategoryId"
+                  disabled={isEditing || !selectedCategoryId || !hasSubCategories}
                   className={`bg-background ${
-                    errors.subCategoryId ? "border-destructive focus:ring-destructive" : ""
+                    isEditing ? "pointer-events-none cursor-not-allowed bg-muted/60 opacity-80" : ""
+                  } ${
+                    errors.subCategoryId && hasSubCategories
+                      ? "border-destructive ring-1 ring-destructive"
+                      : ""
                   }`}
                 >
                   <SelectValue
                     placeholder={
                       !selectedCategoryId
                         ? "Select category first"
-                        : subCategories.length === 0
-                        ? "No sub-categories available"
-                        : "Select a sub-category"
+                        : !hasSubCategories
+                          ? "No sub-categories available"
+                          : "Select Sub-category"
                     }
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {subCategories.map((sub) => (
+                  {availableSubCategories.map((sub) => (
                     <SelectItem key={sub.id} value={String(sub.id)}>
                       {sub.name}
                     </SelectItem>
@@ -127,11 +203,17 @@ const CategorySection = ({ categories = [] }: CategorySectionProps) => {
               </Select>
             )}
           />
-          <p className="text-xs text-muted-foreground">
-            Select a category first to see matching sub-categories
-          </p>
-          {errors.subCategoryId && (
-            <p className="text-xs text-destructive">{errors.subCategoryId.message}</p>
+
+          {isEditing && (
+            <p className="text-[11px] text-muted-foreground">
+              Dynamic schema integrity ke liye category change lock hai.
+            </p>
+          )}
+
+          {errors.subCategoryId && hasSubCategories && !isEditing && (
+            <p className="text-xs text-destructive">
+              {errors.subCategoryId.message as string}
+            </p>
           )}
         </div>
       </CardContent>

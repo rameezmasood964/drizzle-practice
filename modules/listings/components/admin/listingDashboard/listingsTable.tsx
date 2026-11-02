@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import Image from "next/image";
 import {
   MoreHorizontal,
@@ -32,8 +33,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { ListingsTableProps } from "@/modules/listings/types";
-
-
 
 // Status ke semantic variants ke liye mapping
 const getStatusBadgeVariant = (
@@ -103,8 +102,10 @@ const ListingsTable = ({ listings = [] }: ListingsTableProps) => {
                 {/* 2. Image / Thumbnail */}
                 <TableCell>
                   <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+                    {/* @ts-ignore primaryImage check */}
                     {item.primaryImage ? (
                       <Image
+                        // @ts-ignore
                         src={item.primaryImage}
                         alt={item.title}
                         fill
@@ -125,13 +126,6 @@ const ListingsTable = ({ listings = [] }: ListingsTableProps) => {
                         {item.title}
                       </span>
 
-                      {/* Verified Badge */}
-                      {item.isVerified && (
-                        <span title="Verified Business">
-                          <CheckCircle2 className="h-4 w-4 text-primary" />
-                        </span>
-                      )}
-
                       {/* Featured Badge */}
                       {item.isFeatured && (
                         <span title="Featured Listing">
@@ -139,13 +133,22 @@ const ListingsTable = ({ listings = [] }: ListingsTableProps) => {
                         </span>
                       )}
                     </div>
+
+                    {/* Area Name display */}
+                    {item.area?.name && (
+                      <span className="text-xs text-muted-foreground">
+                        {item.area.name}
+                      </span>
+                    )}
                   </div>
                 </TableCell>
 
-                {/* 4. Category Badge */}
+                {/* 4. Category Badge (Parent > SubCategory safe check) */}
                 <TableCell>
                   <Badge variant="outline" className="font-normal">
-                    {item.categories.name}
+                    {item.parentCategory?.name
+                      ? `${item.parentCategory.name} > ${item.category?.name}`
+                      : item.category?.name || "Uncategorized"}
                   </Badge>
                 </TableCell>
 
@@ -161,11 +164,13 @@ const ListingsTable = ({ listings = [] }: ListingsTableProps) => {
 
                 {/* 6. Created At */}
                 <TableCell className="text-sm text-muted-foreground">
-                  {new Date(item.createdAt).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  })}
+                  {item.createdAt
+                    ? new Date(item.createdAt).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })
+                    : "-"}
                 </TableCell>
 
                 {/* 7. Actions Dropdown */}
@@ -186,15 +191,19 @@ const ListingsTable = ({ listings = [] }: ListingsTableProps) => {
                       <DropdownMenuSeparator />
 
                       {/* View Option */}
-                      <DropdownMenuItem className="cursor-pointer gap-2">
-                        <Eye className="h-4 w-4" />
-                        <span>View</span>
+                      <DropdownMenuItem asChild className="cursor-pointer gap-2">
+                        <Link href={`/listings/${item.slug}`} target="_blank">
+                          <Eye className="h-4 w-4" />
+                          <span>View Public</span>
+                        </Link>
                       </DropdownMenuItem>
 
                       {/* Edit Option */}
-                      <DropdownMenuItem className="cursor-pointer gap-2">
-                        <Pencil className="h-4 w-4" />
-                        <span>Edit</span>
+                      <DropdownMenuItem asChild className="cursor-pointer gap-2">
+                        <Link href={`/admin/listings/${item.id}/edit`}>
+                          <Pencil className="h-4 w-4" />
+                          <span>Edit</span>
+                        </Link>
                       </DropdownMenuItem>
 
                       <DropdownMenuSeparator />

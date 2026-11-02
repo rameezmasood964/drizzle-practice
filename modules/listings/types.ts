@@ -1,11 +1,19 @@
-import { getListings } from "./queries";
+// modules/listings/types.ts
+import { getAdminListings, getListingStats } from "./queries";
 import { listingFormSchema } from "./schema";
 import { z } from "zod";
 
-// getListings query ke return hone wale data se automatic type
+// ==========================================
+// Dashboard & Queries Types
+// ==========================================
+
+// getAdminListings query ke return hone wale data se automatic type extraction
 export type ListingItem = NonNullable<
-  Awaited<ReturnType<typeof getListings>>["data"]
+  Awaited<ReturnType<typeof getAdminListings>>["data"]
 >[number];
+
+// Stats query se return hone wala type
+export type ListingStatsData = Awaited<ReturnType<typeof getListingStats>>;
 
 export interface ListingHeaderProps {
   title?: string;
@@ -16,13 +24,20 @@ export interface ListingStatsProps {
   total?: number;
   approved?: number;
   pending?: number;
+  featured?: number;
   draft?: number;
   rejected?: number;
 }
 
 export interface CategoryFilterOption {
-  id: string;
+  id: number | string;
   name: string;
+}
+
+export interface PaginationProps {
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
 }
 
 export interface ListingFiltersProps {
@@ -31,12 +46,14 @@ export interface ListingFiltersProps {
 
 export interface ListingsTableProps {
   listings?: ListingItem[];
+  pagination?: PaginationProps;
 }
 
 export interface ListingsDashboardWrapperProps {
   stats?: ListingStatsProps;
   listings?: ListingItem[];
   categories?: CategoryFilterOption[];
+  pagination?: PaginationProps;
 }
 
 // ==========================================
@@ -62,7 +79,7 @@ export interface DaySchedule {
 export type BusinessHours = Record<DayOfWeek, DaySchedule>;
 
 // 2. Listing Status & Media Types
-export type ListingStatus = "active" | "pending" | "draft" | "rejected";
+export type ListingStatus = "approved" | "pending" | "draft" | "rejected";
 
 export interface ListingMedia {
   id: string;
@@ -80,14 +97,14 @@ export interface DynamicCustomFields {
 
 // 4. Category & Subcategory Types
 export interface SubCategory {
-  id: string;
+  id: number | string;
   name: string;
   slug: string;
-  categoryId: string;
+  categoryId: number | string;
 }
 
 export interface Category {
-  id: string;
+  id: number | string;
   name: string;
   slug: string;
   subCategories?: SubCategory[];
@@ -108,6 +125,7 @@ export type ListingFormData = ListingFormValues;
 export interface AddListingFormProps {
   areas: AreaOption[];
   categories?: Category[];
+  categoryFieldsMap?: Record<string, any[]>;
 }
 
 export interface LocationSectionProps {

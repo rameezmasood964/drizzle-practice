@@ -79,13 +79,7 @@ export const listingFormSchema = z.object({
     .string()
     .min(3, "Title kam az kam 3 characters ka hona chahiye")
     .max(120, "Title 120 characters se zyada nahi ho sakta"),
-  slug: z
-    .string()
-    .min(3, "Slug zaroori hai")
-    .regex(
-      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-      "Slug URL friendly hona chahiye (lowercase, numbers aur hyphens)",
-    ),
+  slug: z.string().optional().default(""),
   description: z
     .string()
     .min(20, "Description kam az kam 20 characters ki honi chahiye"),
@@ -127,10 +121,13 @@ export const listingFormSchema = z.object({
 
   // Category Section
   categoryId: z.string().min(1, "Category select karein"),
-  subCategoryId: z.string().min(1, "Sub-category select karein"),
+  // subCategoryId ko optional ya empty string allow karein:
+  subCategoryId: z.string().optional().nullable(),
 
   // Status & Visibility Section
-  status: z.enum(["active", "pending", "draft", "rejected"]).default("active"),
+  status: z
+    .enum(["approved", "pending", "draft", "rejected"])
+    .default("approved"),
   isFeatured: z.boolean().default(false),
 
   // Dynamic Custom Fields

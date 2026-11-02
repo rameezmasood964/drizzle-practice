@@ -125,3 +125,36 @@ export async function getCategoriesWithSubcategories() {
     return [];
   }
 }
+
+
+
+
+
+/**
+ * Pre-fetch Props Map ke liye:
+ * Tamam active custom fields ko fetch karke categoryId ke hisaab se group karta hai
+ * Output: { "1": [fields...], "2": [fields...] }
+ */
+export async function getAllCategoryFieldsMap() {
+  try {
+    const allFields = await db.query.categoryFields.findMany({
+      where: (fields, { eq }) => eq(fields.isActive, true),
+      orderBy: (fields, { asc }) => [asc(fields.sortOrder)],
+    });
+
+    const fieldsMap: Record<string, typeof allFields> = {};
+
+    for (const field of allFields) {
+      const key = String(field.categoryId);
+      if (!fieldsMap[key]) {
+        fieldsMap[key] = [];
+      }
+      fieldsMap[key].push(field);
+    }
+
+    return fieldsMap;
+  } catch (error) {
+    console.error("Failed to fetch all category fields map:", error);
+    return {};
+  }
+}

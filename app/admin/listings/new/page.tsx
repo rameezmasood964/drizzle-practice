@@ -1,22 +1,31 @@
-// app/admin/listings/new/page.tsx (ya jahan aapka route page hai)
+// app/admin/listings/new/page.tsx
 
 import AddListingForm from "@/modules/listings/components/admin/AddListingForm";
-import { getCategoriesWithSubcategories } from "@/modules/categories/queries";
+// 1. getAllCategoryFieldsMap import shamil kiya
+import {
+  getCategoriesWithSubcategories,
+  getAllCategoryFieldsMap,
+} from "@/modules/categories/queries";
 import { getActiveAreas } from "@/modules/areas/queries";
 
 const NewListingPage = async () => {
-  // Parallel fetch: dono database queries ek sath run hongi
-  const [categories, areasResponse] = await Promise.all([
+  // 2. Teeno queries ek sath parallel chalengi
+  const [categories, areasResponse, categoryFieldsMap] = await Promise.all([
     getCategoriesWithSubcategories(),
     getActiveAreas(),
+    getAllCategoryFieldsMap(),
   ]);
 
-  // getActiveAreas se array extract karein
   const areas = areasResponse?.data || [];
 
   return (
     <main className="min-h-screen bg-background p-4 md:p-8">
-      <AddListingForm categories={categories} areas={areas} />
+      {/* 3. categoryFieldsMap prop pass kar diya */}
+      <AddListingForm
+        categories={categories}
+        areas={areas}
+        categoryFieldsMap={categoryFieldsMap}
+      />
     </main>
   );
 };
