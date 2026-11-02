@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   Table,
@@ -29,7 +30,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { MoreHorizontal, Pencil, Trash2, MapPin, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  MapPin,
+  Plus,
+  Search,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 import type { AreasTableProps, Area } from "../../types";
 import { toggleAreaStatus, deleteArea } from "../../actions/areas";
 import AddAreasForm from "./AddAreasForm";
@@ -37,7 +51,59 @@ import AddAreasForm from "./AddAreasForm";
 export default function AreasTable({
   areas = [],
   isLoading = false,
-}: Partial<AreasTableProps>) {
+  pagination,
+  searchQuery = "",
+}: AreasTableProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [searchTerm, setSearchTerm] = useState(searchQuery);
+  const isFirstRender = useRef(true);
+
+  // Sync state if searchQuery prop changes externally
+  useEffect(() => {
+    setSearchTerm(searchQuery);
+  }, [searchQuery]);
+
+  // Debounce search update (~300ms)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const currentParam = searchParams.get("search") || "";
+      if (searchTerm.trim() === currentParam) return;
+
+      const params = new URLSearchParams(searchParams.toString());
+      if (searchTerm.trim()) {
+        params.set("search", searchTerm.trim());
+      } else {
+        params.delete("search");
+      }
+      params.set("page", "1");
+      router.push(`${pathname}?${params.toString()}`);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, pathname, router, searchParams]);
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", String(newPage));
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  const clearSearch = () => {
+    setSearchTerm("");
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("search");
+    params.set("page", "1");
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
   const [isPending, startTransition] = useTransition();
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -104,20 +170,43 @@ export default function AreasTable({
 
   return (
     <div className="space-y-4">
-      {/* Top Header Bar */}
-      <div className="flex items-center justify-between">
+      {/* Top Header Bar with Search & Action */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">
             Registered Areas
           </h2>
           <p className="text-sm text-muted-foreground">
-            Total {areas.length} areas database mein mojood hain.
+            {pagination
+              ? `Total ${pagination.totalCount} areas database mein mojood hain.`
+              : `Total ${areas.length} areas database mein mojood hain.`}
           </p>
         </div>
-        <Button onClick={handleAddNew} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Area
-        </Button>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search area name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 pr-8 h-9"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <Button onClick={handleAddNew} className="gap-2 shrink-0 cursor-pointer">
+            <Plus className="h-4 w-4" />
+            Add Area
+          </Button>
+        </div>
       </div>
 
       {/* Data Table */}
@@ -221,6 +310,80 @@ export default function AreasTable({
           </Table>
         )}
       </div>
+
+      {/* Pagination Footer */}
+      {pagination && pagination.totalCount > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-sm text-muted-foreground">
+          <div>
+            Showing{" "}
+            <span className="font-medium text-foreground">
+              {pagination.totalCount === 0
+                ? 0
+                : (pagination.currentPage - 1) * pagination.limit + 1}
+            </span>{" "}
+            to{" "}
+            <span className="font-medium text-foreground">
+              {Math.min(
+                pagination.currentPage * pagination.limit,
+                pagination.totalCount,
+              )}
+            </span>{" "}
+            of{" "}
+            <span className="font-medium text-foreground">
+              {pagination.totalCount}
+            </span>{" "}
+            areas
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(1)}
+              disabled={pagination.currentPage <= 1}
+              className="h-8 px-2 cursor-pointer"
+              title="First Page"
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(pagination.currentPage - 1)}
+              disabled={pagination.currentPage <= 1}
+              className="h-8 px-2.5 gap-1 cursor-pointer"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Previous</span>
+            </Button>
+
+            <div className="px-3 py-1 text-xs font-medium rounded-md bg-muted text-foreground">
+              Page {pagination.currentPage} of {pagination.totalPages || 1}
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(pagination.currentPage + 1)}
+              disabled={pagination.currentPage >= pagination.totalPages}
+              className="h-8 px-2.5 gap-1 cursor-pointer"
+            >
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(pagination.totalPages)}
+              disabled={pagination.currentPage >= pagination.totalPages}
+              className="h-8 px-2 cursor-pointer"
+              title="Last Page"
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* 🌟 Add / Edit Shared Dialog */}
       <Dialog

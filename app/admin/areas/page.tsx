@@ -2,8 +2,20 @@ import AreasTable from "@/modules/areas/components/admin/AreasTable";
 import { getAdminAreas } from "@/modules/areas/queries";
 import { MapPin } from "lucide-react";
 
-export default async function AreasAdminPage() {
-  const { data: areasList } = await getAdminAreas();
+interface PageProps {
+  searchParams: Promise<{
+    search?: string;
+    page?: string;
+  }>;
+}
+
+export default async function AreasAdminPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const search = params?.search?.trim() || "";
+  const page = Math.max(1, Number(params?.page) || 1);
+  const limit = 10;
+
+  const result = await getAdminAreas({ search, page, limit });
 
   return (
     <div className="space-y-6 p-6">
@@ -19,7 +31,16 @@ export default async function AreasAdminPage() {
         </p>
       </div>
 
-      <AreasTable areas={areasList || []} />
+      <AreasTable
+        areas={result.data || []}
+        pagination={{
+          currentPage: result.currentPage,
+          totalPages: result.totalPages,
+          totalCount: result.totalCount,
+          limit: result.limit,
+        }}
+        searchQuery={search}
+      />
     </div>
   );
 }

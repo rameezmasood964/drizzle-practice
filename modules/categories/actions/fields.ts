@@ -5,39 +5,51 @@ import { revalidatePath } from "next/cache";
 
 import { z } from "zod";
 import { categoryFields } from "@/app/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 // now we making zod schema for our categories field
 
-const createCategoryFieldSchema = z.object({
-  categoryId: z.number().int().positive("Invalid category ID"),
-  label: z.string().min(1, "Field Label zaroori hai").max(100),
-  key: z
-    .string()
-    .min(1, "Field Key zaroori hai")
-    .max(50)
-    .regex(
-      /^[a-z0-9_]+$/,
-      "Key sirf lowercase letters, numbers aur underscores par mushtamil ho",
-    ),
-  type: z.enum([
-    "text",
-    "number",
-    "textarea",
-    "select",
-    "multiselect",
-    "boolean",
-  ]),
-  options: z.array(z.string()).nullable().optional(),
-  placeholder: z.string().nullable().optional(),
-  helpText: z.string().nullable().optional(),
-  isRequired: z.boolean().default(false),
-  isFilterable: z.boolean().default(false),
-});
+const createCategoryFieldSchema = z
+  .object({
+    categoryId: z.number().int().positive("Invalid category ID"),
+    label: z.string().min(1, "Field Label zaroori hai").max(100),
+    key: z
+      .string()
+      .min(1, "Field Key zaroori hai")
+      .max(50)
+      .regex(
+        /^[a-z0-9_]+$/,
+        "Key sirf lowercase letters, numbers aur underscores par mushtamil ho",
+      ),
+    type: z.enum([
+      "text",
+      "number",
+      "textarea",
+      "select",
+      "multiselect",
+      "boolean",
+    ]),
+    options: z.array(z.string().trim().min(1)).nullable().optional(),
+    placeholder: z.string().nullable().optional(),
+    helpText: z.string().nullable().optional(),
+    isRequired: z.boolean().default(false),
+    isFilterable: z.boolean().default(false),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "select" || data.type === "multiselect") {
+      const validOptions = (data.options || []).filter(
+        (opt) => typeof opt === "string" && opt.trim().length > 0,
+      );
+      if (validOptions.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Select aur Multiselect fields ke liye kam az kam 1 option lazmi hai.",
+          path: ["options"],
+        });
+      }
+    }
+  });
 
-// z.infer ka matlab hai: "Zod, jo schema maine upar banaya hai, usko dekh
-//  kar mere liye ek TypeScript Type (Interface) khud bana do."
-// Is line ke baad aapko alag se lambi TypeScript interface likhne ki zaroorat nahi padti
 export type myCustom = z.infer<typeof createCategoryFieldSchema>;
 
 export async function createCategoriesField(input: myCustom) {
@@ -50,13 +62,8 @@ export async function createCategoriesField(input: myCustom) {
       };
     }
 
-    // Zod se 100% check aur verify hua saaf-suthra data nikal kar variable mein rakhna.
-
     const data = result.data;
 
-    //  "Database! Apne table ke categoryFields.categoryId column mein dekho,
-    //  aur sirf wahi rows dhoond kar nikalo jinki ID hamare user ke page wali
-    //  ID data.categoryId (e.g. 4) ke barabar ho."
     const existingField = await db.query.categoryFields.findFirst({
       where: and(
         eq(categoryFields.categoryId, data.categoryId),
@@ -72,6 +79,16 @@ export async function createCategoriesField(input: myCustom) {
       };
     }
 
+    // Dynamic sort order calculation (Existing max sort order + 1)
+    const [maxOrderResult] = await db
+      .select({
+        maxOrder: sql<number>`COALESCE(MAX(${categoryFields.sortOrder}), -1)::int`,
+      })
+      .from(categoryFields)
+      .where(eq(categoryFields.categoryId, data.categoryId));
+
+    const nextSortOrder = (maxOrderResult?.maxOrder ?? -1) + 1;
+
     // Case B: Field pehle bani thi lekin delete (isActive = false) ho chuki thi -> Wapis Restore Karein
     if (existingField && !existingField.isActive) {
       await db
@@ -85,6 +102,7 @@ export async function createCategoriesField(input: myCustom) {
             data.options && data.options.length > 0 ? data.options : null,
           placeholder: data.placeholder?.trim() || null,
           helpText: data.helpText?.trim() || null,
+          sortOrder: nextSortOrder,
           isActive: true, // 👈 Zinda kar diya
         })
         .where(eq(categoryFields.id, existingField.id));
@@ -93,7 +111,7 @@ export async function createCategoriesField(input: myCustom) {
       return { success: true, message: "Field kamyabi se add ho gayi!" };
     }
 
-    // Case C: Bilkul fresh field hai -> Normal Insert karein
+    // Case C: Bilkul fresh field hai -> Normal Insert karein with dynamic sortOrder
     await db.insert(categoryFields).values({
       categoryId: data.categoryId,
       key: data.key,
@@ -104,7 +122,7 @@ export async function createCategoriesField(input: myCustom) {
       options: data.options && data.options.length > 0 ? data.options : null,
       placeholder: data.placeholder?.trim() || null,
       helpText: data.helpText?.trim() || null,
-      sortOrder: 0,
+      sortOrder: nextSortOrder,
       isActive: true,
     });
 
@@ -219,11 +237,26 @@ export async function updateCategoryFields(
       ),
     });
 
-    if(!exisitingField){
-      return{
-        success : false,
-        error : "ap is field ko edit ni krskty"
+    if (!exisitingField) {
+      return {
+        success: false,
+        error: "ap is field ko edit ni krskty",
+      };
+    }
 
+    if (
+      exisitingField.type === "select" ||
+      exisitingField.type === "multiselect"
+    ) {
+      const validOptions = (data.options || []).filter(
+        (opt) => typeof opt === "string" && opt.trim().length > 0,
+      );
+      if (validOptions.length === 0) {
+        return {
+          success: false,
+          error:
+            "Select aur Multiselect fields ke liye kam az kam 1 option lazmi hai.",
+        };
       }
     }
 

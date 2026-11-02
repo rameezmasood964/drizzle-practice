@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Search, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,14 @@ const ListingFilters = ({
   const currentArea = searchParams.get("areaId") || "all";
   const currentStatus = searchParams.get("status") || "all";
 
+  // Local state for debounced search input
+  const [searchTerm, setSearchTerm] = useState(currentSearch);
+
+  // Sync if URL search param changes (e.g. on Reset or browser back/forward)
+  useEffect(() => {
+    setSearchTerm(currentSearch);
+  }, [currentSearch]);
+
   // URL search params update karne ka central function
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -60,8 +68,20 @@ const ListingFilters = ({
     });
   };
 
+  // Debounced search effect (350ms wait before updating URL)
+  useEffect(() => {
+    if (searchTerm === currentSearch) return;
+
+    const timer = setTimeout(() => {
+      updateFilter("search", searchTerm);
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   // Reset sab filters
   const handleReset = () => {
+    setSearchTerm("");
     startTransition(() => {
       router.push(pathname);
     });
@@ -81,8 +101,8 @@ const ListingFilters = ({
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             id="search"
-            defaultValue={currentSearch}
-            onChange={(e) => updateFilter("search", e.target.value)}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by title or phone..."
             className="pl-9"
           />

@@ -21,6 +21,7 @@ import BusinessHoursSection from "./listingFormComponents/BusinessHoursSection";
 import { listingFormSchema, type ListingFormValues } from "../../schema";
 import { createListingAction } from "../../actions/addlistingaction";
 import { updateListingAction } from "../../actions/updateistingaction";
+import { uploadListingImagesAction } from "../../actions/uploadListingImages";
 
 interface AddListingFormProps {
   areas?: any[];
@@ -95,7 +96,10 @@ export default function AddListingForm({
         subCategoryId: initialCatState.subCatId,
         status: initialData.status || "approved",
         isFeatured: Boolean(initialData.isFeatured),
-        images: [],
+        images:
+          initialData.images && initialData.images.length > 0
+            ? initialData.images
+            : [],
         customFields: initialData.details || {},
         businessHours: initialData.businessHours || {
           monday: { isOpen: true, openTime: "09:00 AM", closeTime: "10:00 PM" },
@@ -185,6 +189,11 @@ export default function AddListingForm({
     if (initialData && isEditing && categories.length > 0) {
       const cats = computeInitialCategories();
 
+      const existingImgs =
+        initialData.images && initialData.images.length > 0
+          ? initialData.images
+          : [];
+
       // Form fields reset
       reset({
         title: initialData.title || "",
@@ -202,7 +211,8 @@ export default function AddListingForm({
         subCategoryId: cats.subCatId,
         status: initialData.status || "approved",
         isFeatured: Boolean(initialData.isFeatured),
-        images: [],
+        // 👇 Reset mein images pass karein
+        images: existingImgs,
         customFields: initialData.details || {},
         businessHours: initialData.businessHours || defaultValues.businessHours,
       });
@@ -219,6 +229,11 @@ export default function AddListingForm({
           shouldDirty: false,
           shouldValidate: false,
         });
+      }
+
+      // 👇 Force images set karein taake MediaSection ko foran mil jayein
+      if (existingImgs.length > 0) {
+        methods.setValue("images", existingImgs, { shouldValidate: true });
       }
     }
   }, [initialData, isEditing, categories]);
@@ -317,14 +332,57 @@ export default function AddListingForm({
     // 4. Server Action Call (Conditional: Update vs Create)
     startTransition(async () => {
       try {
+        // (A) Check karein kya nayi images upload karni hain Supabase par
+        if (data.images && data.images.length > 0) {
+          const newFilesToUpload: { index: number; file: File }[] = [];
+
+          data.images.forEach((img: any, idx: number) => {
+            if (img.file && img.file instanceof File) {
+              newFilesToUpload.push({ index: idx, file: img.file });
+            }
+          });
+
+          if (newFilesToUpload.length > 0) {
+            const uploadFormData = new FormData();
+            newFilesToUpload.forEach(({ file }) => {
+              uploadFormData.append("files", file);
+            });
+
+            const uploadRes = await uploadListingImagesAction(uploadFormData);
+            if (!uploadRes.success || !uploadRes.urls || uploadRes.urls.length === 0) {
+              toast.error(uploadRes.message || "Images upload nahi ho sakeen.");
+              return;
+            }
+
+            // Uploaded permanent Supabase URLs ko replace karein
+            uploadRes.urls.forEach((uploadedUrl, i) => {
+              const targetIdx = newFilesToUpload[i].index;
+              data.images[targetIdx].url = uploadedUrl;
+              delete data.images[targetIdx].file;
+            });
+          }
+        }
+
+        // Clean image payload (bina raw File object ke taake clean serialize ho)
+        const cleanImages = (data.images || []).map((img: any) => ({
+          id: String(img.id),
+          url: String(img.url),
+          isCover: Boolean(img.isCover),
+        }));
+
+        const payload = {
+          ...data,
+          images: cleanImages,
+        };
+
         let res;
         if (isEditing && initialData?.id) {
           res = await updateListingAction(
             initialData.id,
-            data as ListingFormValues,
+            payload as ListingFormValues,
           );
         } else {
-          res = await createListingAction(data as ListingFormValues);
+          res = await createListingAction(payload as ListingFormValues);
         }
 
         if (res.success) {

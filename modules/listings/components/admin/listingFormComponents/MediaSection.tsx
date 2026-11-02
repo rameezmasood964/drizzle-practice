@@ -119,6 +119,7 @@ const MediaSection = () => {
                   src={image.url}
                   alt="Listing preview"
                   fill
+                  unoptimized
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, 128px"
                 />

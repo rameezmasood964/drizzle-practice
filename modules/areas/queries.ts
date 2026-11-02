@@ -1,22 +1,64 @@
 
 import { db } from "@/app/db";
 import { areas } from "@/app/db/schema";
-import { desc, eq, asc } from "drizzle-orm";
+import { desc, eq, asc, ilike, sql } from "drizzle-orm";
+
+export interface GetAdminAreasParams {
+  search?: string;
+  page?: number;
+  limit?: number;
+}
 
 /**
  * 1. Admin Table ke liye:
  * Sare areas fetch karta hai (Active aur Inactive dono).
- * Latest areas sabse upar aayenge.
+ * Search by name (case-insensitive) aur pagination support karta hai.
  */
-export async function getAdminAreas() {
+export async function getAdminAreas(params?: GetAdminAreasParams) {
   try {
-    const data = await db.query.areas.findMany({
-      orderBy: [desc(areas.createdAt)],
-    });
-    return { success: true, data };
+    const page = Math.max(1, Number(params?.page) || 1);
+    const limit = Math.max(1, Number(params?.limit) || 10);
+    const offset = (page - 1) * limit;
+    const search = params?.search?.trim();
+
+    const whereClause = search ? ilike(areas.name, `%${search}%`) : undefined;
+
+    // Total Count
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(areas)
+      .where(whereClause);
+
+    const totalCount = countResult?.count ?? 0;
+    const totalPages = Math.ceil(totalCount / limit) || 1;
+
+    // Paginated list
+    const data = await db
+      .select()
+      .from(areas)
+      .where(whereClause)
+      .orderBy(desc(areas.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return {
+      success: true,
+      data,
+      totalCount,
+      totalPages,
+      currentPage: page,
+      limit,
+    };
   } catch (error) {
     console.error("GET_ADMIN_AREAS_ERROR:", error);
-    return { success: false, data: [] };
+    return {
+      success: false,
+      data: [],
+      totalCount: 0,
+      totalPages: 1,
+      currentPage: 1,
+      limit: 10,
+    };
   }
 }
 

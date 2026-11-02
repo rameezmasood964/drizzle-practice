@@ -11,8 +11,18 @@ export interface Categories {
   createdAt?: Date;
 }
 
+export interface CategoryPaginationInfo {
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+  limit: number;
+}
+
 export interface CategoryTableProps {
   categories: Categories[];
+  allCategories?: Categories[];
+  pagination?: CategoryPaginationInfo;
+  searchQuery?: string;
 }
 
 export interface CategoryFormProps {

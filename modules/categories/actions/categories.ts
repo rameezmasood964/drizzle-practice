@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/app/db";
-import { categories } from "@/app/db/schema";
+import { categories, listings } from "@/app/db/schema";
 import { revalidatePath } from "next/cache";
 import z from "zod";
 import { createClient } from "@supabase/supabase-js";
@@ -409,87 +409,140 @@ export async function updatecategory(prevState: any, formdata: FormData) {
   }
 }
 
-// delete action function ...........
+/* ----------------------- TOGGLE CATEGORY STATUS (SWITCH) ----------------------- */
+export async function toggleCategoryStatusAction(
+  categoryId: number,
+  isActive: boolean,
+) {
+  try {
+    const [updated] = await db
+      .update(categories)
+      .set({ isActive })
+      .where(eq(categories.id, categoryId))
+      .returning({ id: categories.id, name: categories.name });
 
-export async function deleteCategory(id: string) {
-  const categoryId = parseInt(id);
+    if (!updated) {
+      return { success: false, message: "Category not found." };
+    }
+
+    // Cascading Logic: Agar Parent Category deactivate ho rahi hai,
+    // toh uske saare direct subcategories ko bhi deactivate kar do
+    if (!isActive) {
+      await db
+        .update(categories)
+        .set({ isActive: false })
+        .where(eq(categories.parentId, categoryId));
+    }
+
+    revalidatePath("/admin/categories");
+    return {
+      success: true,
+      message: `Category "${updated.name}" ${isActive ? "activated" : "deactivated"} successfully!`,
+    };
+  } catch (error: any) {
+    if (isRedirectError(error)) throw error;
+    console.error("TOGGLE CATEGORY STATUS ERROR:", error);
+    return {
+      success: false,
+      message: "Failed to update category status. Please try again.",
+    };
+  }
+}
+
+/* ------------------------ SAFE HARD DELETE CATEGORY ------------------------ */
+export async function deleteCategoryAction(id: string | number) {
+  const categoryId = typeof id === "string" ? parseInt(id, 10) : id;
+
+  if (isNaN(categoryId)) {
+    return {
+      success: false,
+      message: "Invalid Category ID.",
+    };
+  }
 
   try {
-    const exisitingCategory = await db.query.categories.findFirst({
+    // Pehle category record dhoondein
+    const existingCategory = await db.query.categories.findFirst({
       where: (c, { eq }) => eq(c.id, categoryId),
     });
 
-    if (!exisitingCategory) {
-      return { success: false, message: "Category not found" };
+    if (!existingCategory) {
+      return { success: false, message: "Category not found or already deleted." };
     }
 
-    if (exisitingCategory.icon) {
-      const fileName = exisitingCategory.icon.split("/").pop();
-      if (fileName) {
-        await supabase.storage.from("categories_icons").remove([fileName]);
-      }
-    }
+    // Check 1 (Subcategories): Agar is category ke subcategories mojood hain
+    const existingSubcategories = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.parentId, categoryId))
+      .limit(1);
 
-    // 2. Database se row delete karna (Drizzle)
-    // 🌟 Soft Delete: Row delete karne ke bajaye isActive ko false kar do
-    await db
-      .update(categories)
-      .set({ isActive: false })
-      .where(eq(categories.id, categoryId));
-
-    // Page refresh karna taake UI se item gayab ho jaye
-    revalidatePath("/admin/categories");
-
-    return { success: true, message: "Category deleted successfully!" };
-  } catch (error: any) {
-    if (isRedirectError(error)) throw error;
-
-    console.error("DELETE ERROR:", error);
-    return { success: false, message: "Failed to delete category." };
-  }
-}
-
-
-/* ----------------------------- DELETE (SOFT DELETE) AREA ----------------------------- */
-export async function deleteArea(id: string | number) {
-  const areaId = typeof id === "string" ? parseInt(id, 10) : id;
-
-  if (isNaN(areaId)) {
-    return {
-      success: false,
-      message: "Invalid Area ID.",
-    };
-  }
-
-  try {
-    // Database se delete nahi karna, bas isActive ko false karna hai
-    const updated = await db
-      .update(areas)
-      .set({
-        isActive: false,
-      })
-      .where(eq(areas.id, areaId))
-      .returning({ id: areas.id });
-
-    if (updated.length === 0) {
+    if (existingSubcategories.length > 0) {
       return {
         success: false,
-        message: "Area not found or already deleted.",
+        message:
+          "Cannot delete category because it has subcategories. Please remove or reassign them first.",
       };
     }
 
-    revalidatePath("/admin/areas");
+    // Check 2 (Listings): Agar is category ke sath listings linked hain
+    const linkedListings = await db
+      .select({ id: listings.id })
+      .from(listings)
+      .where(eq(listings.categoryId, categoryId))
+      .limit(1);
+
+    if (linkedListings.length > 0) {
+      return {
+        success: false,
+        message:
+          "Cannot delete category because listings are assigned to it. Please deactivate it instead or reassign the listings.",
+      };
+    }
+
+    // Supabase Storage se icon delete karein agar mojood ho
+    if (existingCategory.icon) {
+      const fileName = existingCategory.icon.split("/").pop();
+      if (fileName) {
+        try {
+          await supabase.storage.from("categories_icons").remove([fileName]);
+        } catch (e) {
+          console.error("Supabase icon delete warning:", e);
+        }
+      }
+    }
+
+    // Check 3 / Permanent Delete: Database se row delete karein
+    await db.delete(categories).where(eq(categories.id, categoryId));
+
+    revalidatePath("/admin/categories");
     return {
       success: true,
-      message: "Area deactivated successfully!",
+      message: `Category "${existingCategory.name}" permanently deleted successfully!`,
     };
   } catch (error: any) {
     if (isRedirectError(error)) throw error;
 
-    console.error("DELETE AREA ERROR:", error);
+    console.error("DELETE CATEGORY ERROR:", error);
+
+    const pgError = error.cause || error;
+    const errorCode = pgError.code || error.code;
+
+    // Foreign Key constraint violation code 23503
+    if (errorCode === "23503") {
+      return {
+        success: false,
+        message:
+          "Cannot delete category because other records are linked to it. Please deactivate it instead.",
+      };
+    }
+
     return {
       success: false,
-      message: "Failed to delete area. Please try again.",
+      message: "Failed to delete category. Please try again later.",
     };
   }
 }
+
+// Backward compatibility alias
+export const deleteCategory = deleteCategoryAction;

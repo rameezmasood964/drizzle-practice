@@ -1,19 +1,29 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // 👈 Yeh configuration add karni hai
+  // 1. Server Actions Body Size Limit (Badi files upload karne ke liye)
   experimental: {
     serverActions: {
-      bodySizeLimit: "10mb", // Aap yahan 5mb ya 10mb apni marzi se rakh sakte hain
+      bodySizeLimit: "10mb",
     },
   },
 
-  // 1. External images allow karne ke liye (Error theek karne ke liye)
+  // 2. External Images Configuration
   images: {
     remotePatterns: [
       {
         protocol: "https",
         hostname: "images.unsplash.com",
+      },
+      // Agar Cloudinary use kar rahe hain:
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
+      // Tamam HTTPS external image URLs ko allow karne ke liye (Sabse safe option):
+      {
+        protocol: "https",
+        hostname: "**",
       },
     ],
   },

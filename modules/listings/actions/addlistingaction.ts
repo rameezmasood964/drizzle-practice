@@ -1,7 +1,12 @@
 "use server";
 
 import { db } from "@/app/db";
-import { listings, categories, categoryFields } from "@/app/db/schema";
+import {
+  listings,
+  categories,
+  categoryFields,
+  listingImages,
+} from "@/app/db/schema";
 import { listingFormSchema } from "../schema";
 import type { ListingFormValues } from "../schema";
 import { eq, or, like } from "drizzle-orm";
@@ -178,6 +183,18 @@ export async function createListingAction(formData: ListingFormValues) {
         isFeatured: Boolean(data.isFeatured),
       })
       .returning();
+
+    // 🖼️ 6. Images Insert in listingImages table
+    if (data.images && data.images.length > 0) {
+      await db.insert(listingImages).values(
+        data.images.map((img, index) => ({
+          listingId: newListing.id,
+          imageUrl: img.url,
+          isPrimary: Boolean(img.isCover || index === 0),
+          sortOrder: index,
+        })),
+      );
+    }
 
     revalidatePath("/admin/listings");
 

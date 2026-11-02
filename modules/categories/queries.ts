@@ -3,18 +3,77 @@ import { categories } from "@/app/db/schema";
 import { eq } from "drizzle-orm";
 import { inArray } from "drizzle-orm";
 
-export async function getCategories() {
+export interface GetCategoriesParams {
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export async function getCategories(params?: GetCategoriesParams) {
   try {
-    const data = await db.query.categories.findMany({
-      // 🌟 Sirf wohi categories fetch karo jo active hain
-      where: (categories, { eq }) => eq(categories.isActive, true),
+    const page = Math.max(1, Number(params?.page) || 1);
+    const limit = Math.max(1, Number(params?.limit) || 10);
+    const search = params?.search?.trim();
+
+    // Fetch all categories for full tree resolution & form dropdowns
+    const allCategories = await db.query.categories.findMany({
       orderBy: (categories, { asc }) => [asc(categories.sortOrder)],
     });
 
-    return data;
+    if (search) {
+      const searchLower = search.toLowerCase();
+      const matching = allCategories.filter((c) =>
+        c.name.toLowerCase().includes(searchLower),
+      );
+
+      const totalCount = matching.length;
+      const totalPages = Math.ceil(totalCount / limit) || 1;
+      const offset = (page - 1) * limit;
+      const data = matching.slice(offset, offset + limit);
+
+      return {
+        data,
+        allCategories,
+        totalCount,
+        totalPages,
+        currentPage: page,
+        limit,
+      };
+    }
+
+    // Default hierarchy: Paginate root categories, and include their subcategories
+    const rootCategories = allCategories.filter((c) => c.parentId === null);
+    const totalCount = rootCategories.length;
+    const totalPages = Math.ceil(totalCount / limit) || 1;
+    const offset = (page - 1) * limit;
+    const paginatedRoots = rootCategories.slice(offset, offset + limit);
+    const paginatedRootIds = new Set(paginatedRoots.map((r) => r.id));
+
+    // Direct and nested subcategories of the paginated roots
+    const subCategories = allCategories.filter(
+      (c) => c.parentId !== null && paginatedRootIds.has(c.parentId),
+    );
+
+    const data = [...paginatedRoots, ...subCategories];
+
+    return {
+      data,
+      allCategories,
+      totalCount,
+      totalPages,
+      currentPage: page,
+      limit,
+    };
   } catch (error) {
     console.error("Failed to fetch categories:", error);
-    return [];
+    return {
+      data: [],
+      allCategories: [],
+      totalCount: 0,
+      totalPages: 1,
+      currentPage: 1,
+      limit: 10,
+    };
   }
 }
 

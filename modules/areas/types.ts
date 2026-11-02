@@ -7,10 +7,19 @@ export interface AreaItem {
   createdAt: Date | string;
 }
 
+export interface PaginationInfo {
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+  limit: number;
+}
+
 // Table Component Props
 export interface AreasTableProps {
   areas?: AreaItem[];
   isLoading?: boolean;
+  pagination?: PaginationInfo;
+  searchQuery?: string;
 }
 
 // Form Values Structure

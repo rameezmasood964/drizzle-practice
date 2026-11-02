@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, ne, eq, like } from "drizzle-orm";
+import { and, ne, eq, like, notInArray } from "drizzle-orm";
 
 import { db } from "@/app/db";
-import { listings } from "@/app/db/schema";
+import { listings, listingImages } from "@/app/db/schema";
 import { listingFormSchema } from "../schema";
 import type { ListingFormValues } from "../types";
 
@@ -89,7 +89,7 @@ export async function updateListingAction(
       }
     }
 
-    // 3. Database Update
+    // 3. Database Main Listing Update
     const [updatedListing] = await db
       .update(listings)
       .set({
@@ -113,6 +113,74 @@ export async function updateListingAction(
       })
       .where(eq(listings.id, id))
       .returning();
+
+    // 4. 🖼️ IMAGES SYNC LOGIC (Purani vs Nayi Images Handle Karna)
+    if (data.images && data.images.length > 0) {
+      // (A) DB mein pehle se mojood images fetch karein
+      const existingDbImages = await db
+        .select({
+          id: listingImages.id,
+          imageUrl: listingImages.imageUrl,
+        })
+        .from(listingImages)
+        .where(eq(listingImages.listingId, id));
+
+      const existingUrlsSet = new Set(existingDbImages.map((img) => img.imageUrl));
+
+      // (B) Form mein maujood valid URLs
+      const formImageUrls = data.images
+        .map((img) => img.url)
+        .filter((url) => Boolean(url) && !url.startsWith("blob:"));
+
+      // (C) Jo DB mein theen magar form se user ne remove kar deen, unhe delete karein
+      if (formImageUrls.length > 0) {
+        await db
+          .delete(listingImages)
+          .where(
+            and(
+              eq(listingImages.listingId, id),
+              notInArray(listingImages.imageUrl, formImageUrls),
+            ),
+          );
+      } else {
+        await db.delete(listingImages).where(eq(listingImages.listingId, id));
+      }
+
+      // (D) Har image ko check karein: agar pehle se DB mein hai to update, warna insert
+      for (let index = 0; index < data.images.length; index++) {
+        const img = data.images[index];
+        if (!img.url || img.url.startsWith("blob:")) continue;
+
+        const isCover = Boolean(img.isCover || index === 0);
+
+        if (existingUrlsSet.has(img.url)) {
+          // Pehle se mojood image: sort order aur cover flag update karein
+          await db
+            .update(listingImages)
+            .set({
+              isPrimary: isCover,
+              sortOrder: index,
+            })
+            .where(
+              and(
+                eq(listingImages.listingId, id),
+                eq(listingImages.imageUrl, img.url),
+              ),
+            );
+        } else {
+          // Nayi upload shuda image: DB mein insert karein
+          await db.insert(listingImages).values({
+            listingId: id,
+            imageUrl: img.url,
+            isPrimary: isCover,
+            sortOrder: index,
+          });
+        }
+      }
+    } else {
+      // Agar user ne saari images delete kar di hon
+      await db.delete(listingImages).where(eq(listingImages.listingId, id));
+    }
 
     revalidatePath("/admin/listings");
     revalidatePath(`/listings/${finalUniqueSlug}`);

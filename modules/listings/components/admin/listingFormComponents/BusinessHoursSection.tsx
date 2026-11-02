@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import type { ListingFormValues } from "../../schema";
+import type { ListingFormValues } from "@/modules/listings/schema";
 
 const DAYS_CONFIG = [
   { key: "monday", label: "Monday" },

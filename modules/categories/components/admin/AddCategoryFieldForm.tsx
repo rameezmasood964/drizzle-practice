@@ -47,6 +47,7 @@ const AddCategoryFieldForm = ({
   const [isFilterable, setIsFilterable] = useState(
     Boolean(initialData?.isFilterable),
   );
+  const [optionsError, setOptionsError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const isEditMode = Boolean(initialData);
@@ -62,15 +63,23 @@ const AddCategoryFieldForm = ({
   // handle submitfunction
 
   const handleSubmit = async () => {
+    const isOptionField = fieldType === "select" || fieldType === "multiselect";
+    const optionsArray = isOptionField
+      ? options
+          .split(",")
+          .map((item: any) => item.trim())
+          .filter(Boolean)
+      : null;
+
+    if (isOptionField && (!optionsArray || optionsArray.length === 0)) {
+      setOptionsError("Kam az kam 1 option enter karna lazmi hai (comma-separated).");
+      toast.error("Dropdown options enter karein (kam az kam 1 option lazmi hai)");
+      return;
+    }
+    setOptionsError("");
+
     setIsLoading(true);
     try {
-      const optionsArray =
-        fieldType === "select" || fieldType === "multiselect"
-          ? options
-              .split(",")
-              .map((item: any) => item.trim())
-              .filter(Boolean)
-          : null;
 
       let response;
 
@@ -190,12 +199,30 @@ const AddCategoryFieldForm = ({
         {/* Options Input (Only visible for Select / Multiselect) */}
         {(fieldType === "select" || fieldType === "multiselect") && (
           <div className="space-y-1.5">
-            <Label htmlFor="options">Dropdown Options (Comma Separated)</Label>
+            <Label htmlFor="options" className="flex items-center gap-1">
+              Dropdown Options (Comma Separated) <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="options"
+              placeholder="e.g. Option 1, Option 2, Option 3"
+              className={optionsError ? "border-destructive focus-visible:ring-destructive" : ""}
               value={options}
-              onChange={(e) => setOptions(e.target.value)}
+              onChange={(e) => {
+                setOptions(e.target.value);
+                if (optionsError && e.target.value.trim()) {
+                  setOptionsError("");
+                }
+              }}
             />
+            {optionsError ? (
+              <p className="text-[12px] font-medium text-destructive">
+                {optionsError}
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                Enter comma-separated values (e.g. Small, Medium, Large)
+              </p>
+            )}
           </div>
         )}
 

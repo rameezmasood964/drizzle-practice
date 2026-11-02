@@ -29,6 +29,7 @@ const EditListingPage = async ({ params }: EditListingPageProps) => {
       getActiveAreas(),
       getAllCategoryFieldsMap(),
     ]);
+  console.log("FETCHED LISTING IMAGES:", listing?.images);
 
   if (!listing) {
     notFound();
