@@ -1,10 +1,10 @@
 "use server";
 
-import { db } from "@/app/db";
+import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 
 import { z } from "zod";
-import { categoryFields } from "@/app/db/schema";
+import { categoryFields } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 
 // now we making zod schema for our categories field

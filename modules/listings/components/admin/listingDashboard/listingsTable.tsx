@@ -11,8 +11,12 @@ import {
   Pencil,
   Trash2,
   CheckCircle2,
+  XCircle,
+  Clock,
   Star,
   ImageIcon,
+  MapPin,
+  ExternalLink,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -30,6 +34,16 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,7 +55,20 @@ import {
 
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { deleteListingAction } from "@/modules/listings/actions/deletelistingaction";
+import {
+  updateListingStatusAction,
+  toggleListingFeaturedAction,
+  type ListingStatusType,
+} from "@/modules/listings/actions/updateListingStatusAction";
 import { ListingsTableProps } from "@/modules/listings/types";
+
+// Common rejection presets for fast selection
+const REJECTION_PRESETS = [
+  "Location is outside Bahawalpur boundary",
+  "Invalid or unreachable phone number",
+  "Incorrect or misleading business information",
+  "Inappropriate images or details",
+];
 
 // Status ke semantic variants ke liye mapping
 const getStatusBadgeVariant = (
@@ -82,7 +109,18 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
   } | null>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
 
-  // 2. Delete confirm action handler
+  // 2. Quick Status State
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [isUpdatingStatus, startStatusTransition] = useTransition();
+
+  // 3. Rejection Modal State
+  const [rejectingListing, setRejectingListing] = useState<{
+    id: number;
+    title: string;
+  } | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+
+  // Delete confirm action handler
   const handleDeleteConfirm = () => {
     if (!listingToDelete) return;
 
@@ -97,6 +135,63 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
         }
       } catch (error) {
         toast.error("Listing delete karte waqt server error aaya.");
+      }
+    });
+  };
+
+  // Quick Status change handler (Approve, Pending, Reject)
+  const handleStatusChange = (
+    listingId: number,
+    status: ListingStatusType,
+    reason?: string,
+  ) => {
+    setUpdatingId(listingId);
+    startStatusTransition(async () => {
+      try {
+        const res = await updateListingStatusAction({
+          listingId,
+          status,
+          rejectionReason: reason,
+        });
+
+        if (res.success) {
+          toast.success(res.message);
+          if (status === "rejected") {
+            setRejectingListing(null);
+            setRejectionReason("");
+          }
+        } else {
+          toast.error(res.message);
+        }
+      } catch (error) {
+        toast.error("Status update karte waqt error aaya.");
+      } finally {
+        setUpdatingId(null);
+      }
+    });
+  };
+
+  // Toggle Featured status handler
+  const handleToggleFeatured = (
+    listingId: number,
+    currentFeatured: boolean,
+  ) => {
+    setUpdatingId(listingId);
+    startStatusTransition(async () => {
+      try {
+        const res = await toggleListingFeaturedAction(
+          listingId,
+          currentFeatured,
+        );
+        if (res.success) {
+          toast.success(res.message);
+        } else {
+          toast.error(res.message);
+        }
+      } catch (error) {
+        toast.error("Featured status update karte waqt error aaya.");
+      } finally {
+        setUpdatingId(null);
       }
     });
   };
@@ -169,28 +264,66 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
                     </div>
                   </TableCell>
 
-                  {/* 3. Listing Name + Badges */}
+                  {/* 3. Listing Name + Location & Quick Map Verification */}
                   <TableCell>
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1.5">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-foreground">
+                        <span className="font-semibold text-foreground leading-tight">
                           {item.title}
                         </span>
 
                         {/* Featured Badge */}
                         {item.isFeatured && (
                           <span title="Featured Listing">
-                            <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
+                            <Star className="h-4 w-4 fill-amber-500 text-amber-500 shrink-0" />
                           </span>
                         )}
                       </div>
 
-                      {/* Area Name display */}
-                      {item.area?.name && (
-                        <span className="text-xs text-muted-foreground">
-                          {item.area.name}
-                        </span>
-                      )}
+                      {/* Location Details & Maps Link */}
+                      <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                        {item.area?.name && (
+                          <span className="font-medium text-foreground/80">
+                            {item.area.name}
+                          </span>
+                        )}
+
+                        {item.address && (
+                          <>
+                            {item.area?.name && <span>•</span>}
+                            <span
+                              className="line-clamp-1 max-w-[200px]"
+                              title={item.address}
+                            >
+                              {item.address}
+                            </span>
+                          </>
+                        )}
+
+                        <span>•</span>
+
+                        {item.mapsUrl ? (
+                          <a
+                            href={item.mapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80 hover:underline cursor-pointer"
+                            title="Verify location on Google Maps in new tab"
+                          >
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            <span>Maps</span>
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                          </a>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 text-muted-foreground/50 italic"
+                            title="No Google Maps link provided"
+                          >
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            <span>No Map</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </TableCell>
 
@@ -205,16 +338,34 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
 
                   {/* 5. Status Badge */}
                   <TableCell>
-                    <Badge
-                      variant={getStatusBadgeVariant(item.status)}
-                      className="capitalize"
-                    >
-                      {item.status}
-                    </Badge>
+                    <div className="flex flex-col gap-1 items-start">
+                      <Badge
+                        variant={getStatusBadgeVariant(item.status)}
+                        className={`capitalize font-medium ${
+                          item.status === "approved"
+                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                            : item.status === "pending"
+                            ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                            : item.status === "rejected"
+                            ? "bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30"
+                            : ""
+                        }`}
+                      >
+                        {item.status}
+                      </Badge>
+                      {item.status === "rejected" && item.adminNotes && (
+                        <span
+                          className="text-[11px] text-rose-600 dark:text-rose-400 line-clamp-1 max-w-[150px]"
+                          title={`Rejection Reason: ${item.adminNotes}`}
+                        >
+                          {item.adminNotes}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
 
                   {/* 6. Created At */}
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {item.createdAt
                       ? new Date(item.createdAt).toLocaleDateString("en-US", {
                           year: "numeric",
@@ -231,13 +382,14 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          disabled={isUpdatingStatus && updatingId === item.id}
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
                         >
                           <span className="sr-only">Open menu</span>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40">
+                      <DropdownMenuContent align="end" className="w-52">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
 
@@ -261,6 +413,96 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
                             <Pencil className="h-4 w-4" />
                             <span>Edit</span>
                           </Link>
+                        </DropdownMenuItem>
+
+                        {/* Direct Maps Verification */}
+                        {item.mapsUrl && (
+                          <DropdownMenuItem
+                            asChild
+                            className="cursor-pointer gap-2"
+                          >
+                            <a
+                              href={item.mapsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <MapPin className="h-4 w-4 text-primary" />
+                              <span>Open on Maps</span>
+                              <ExternalLink className="h-3 w-3 ml-auto opacity-70" />
+                            </a>
+                          </DropdownMenuItem>
+                        )}
+
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
+                          Quick Status
+                        </DropdownMenuLabel>
+
+                        {/* Quick Approve */}
+                        {item.status !== "approved" && (
+                          <DropdownMenuItem
+                            disabled={isUpdatingStatus && updatingId === item.id}
+                            className="cursor-pointer gap-2 text-emerald-600 dark:text-emerald-400 focus:text-emerald-700 dark:focus:text-emerald-300"
+                            onClick={() => handleStatusChange(item.id, "approved")}
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span>Approve</span>
+                          </DropdownMenuItem>
+                        )}
+
+                        {/* Quick Reject */}
+                        {item.status !== "rejected" && (
+                          <DropdownMenuItem
+                            disabled={isUpdatingStatus && updatingId === item.id}
+                            className="cursor-pointer gap-2 text-rose-600 dark:text-rose-400 focus:text-rose-700 dark:focus:text-rose-300"
+                            onClick={() => {
+                              setRejectingListing({
+                                id: item.id,
+                                title: item.title,
+                              });
+                              setRejectionReason(item.adminNotes || "");
+                            }}
+                          >
+                            <XCircle className="h-4 w-4" />
+                            <span>Reject...</span>
+                          </DropdownMenuItem>
+                        )}
+
+                        {/* Quick Mark Pending */}
+                        {item.status !== "pending" && (
+                          <DropdownMenuItem
+                            disabled={isUpdatingStatus && updatingId === item.id}
+                            className="cursor-pointer gap-2 text-amber-600 dark:text-amber-400 focus:text-amber-700 dark:focus:text-amber-300"
+                            onClick={() => handleStatusChange(item.id, "pending")}
+                          >
+                            <Clock className="h-4 w-4" />
+                            <span>Mark as Pending</span>
+                          </DropdownMenuItem>
+                        )}
+
+                        {/* Toggle Featured */}
+                        <DropdownMenuItem
+                          disabled={isUpdatingStatus && updatingId === item.id}
+                          className="cursor-pointer gap-2"
+                          onClick={() =>
+                            handleToggleFeatured(
+                              item.id,
+                              Boolean(item.isFeatured),
+                            )
+                          }
+                        >
+                          <Star
+                            className={`h-4 w-4 ${
+                              item.isFeatured
+                                ? "fill-amber-500 text-amber-500"
+                                : "text-muted-foreground"
+                            }`}
+                          />
+                          <span>
+                            {item.isFeatured
+                              ? "Unmark Featured"
+                              : "Mark as Featured"}
+                          </span>
                         </DropdownMenuItem>
 
                         <DropdownMenuSeparator />
@@ -374,6 +616,106 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
         isLoading={isDeleting}
         onConfirm={handleDeleteConfirm}
       />
+
+      {/* 4. Quick Rejection Dialog with Presets */}
+      <Dialog
+        open={Boolean(rejectingListing)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectingListing(null);
+            setRejectionReason("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <XCircle className="h-5 w-5" />
+              <span>Reject Listing</span>
+            </DialogTitle>
+            <DialogDescription>
+              Aap &ldquo;{rejectingListing?.title}&rdquo; ko reject karne lage hain.
+              Rejection reason provide karein taake record safe rahe.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Quick preset chips */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                Quick Reason Presets:
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {REJECTION_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setRejectionReason(preset)}
+                    className={`rounded-full border px-2.5 py-1 text-xs transition-colors cursor-pointer ${
+                      rejectionReason === preset
+                        ? "border-destructive bg-destructive/10 text-destructive font-medium"
+                        : "border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom note textarea */}
+            <div className="space-y-1.5">
+              <Label htmlFor="rejectionNote" className="text-sm font-medium">
+                Reason / Admin Note
+              </Label>
+              <Textarea
+                id="rejectionNote"
+                rows={3}
+                placeholder="e.g. Location is outside Bahawalpur boundary, shop does not exist..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                className="resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isUpdatingStatus}
+              onClick={() => {
+                setRejectingListing(null);
+                setRejectionReason("");
+              }}
+              className="cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isUpdatingStatus || !rejectingListing}
+              onClick={() => {
+                if (rejectingListing) {
+                  handleStatusChange(
+                    rejectingListing.id,
+                    "rejected",
+                    rejectionReason.trim() ||
+                      "Location or listing details rejected by admin",
+                  );
+                }
+              }}
+              className="cursor-pointer gap-1.5"
+            >
+              <XCircle className="h-4 w-4" />
+              <span>
+                {isUpdatingStatus ? "Rejecting..." : "Confirm Rejection"}
+              </span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

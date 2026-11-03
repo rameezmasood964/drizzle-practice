@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { and, ne, eq, like, notInArray } from "drizzle-orm";
 
-import { db } from "@/app/db";
-import { listings, listingImages } from "@/app/db/schema";
+import { db } from "@/db";
+import { listings, listingImages } from "@/db/schema";
 import { listingFormSchema } from "../schema";
 import type { ListingFormValues } from "../types";
 

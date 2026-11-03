@@ -1,7 +1,7 @@
 import ListingsDashboardWrapper from "@/modules/listings/components/admin/ListingsDashboardWrapper";
 import { getAdminListings, getListingStats } from "@/modules/listings/queries";
-import { db } from "@/app/db";
-import { categories, areas } from "@/app/db/schema"; // 👈 areas import karein
+import { db } from "@/db";
+import { categories, areas } from "@/db/schema"; // 👈 areas import karein
 import { isNull, asc } from "drizzle-orm";
 
 interface PageProps {

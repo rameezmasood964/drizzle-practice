@@ -1,7 +1,7 @@
 "use server";
 
-import { db } from "@/app/db";
-import { categories, listings } from "@/app/db/schema";
+import { db } from "@/db";
+import { categories, listings } from "@/db/schema";
 import { revalidatePath } from "next/cache";
 import z from "zod";
 import { createClient } from "@supabase/supabase-js";

@@ -1,12 +1,12 @@
 "use server";
 
-import { db } from "@/app/db";
+import { db } from "@/db";
 import {
   listings,
   categories,
   categoryFields,
   listingImages,
-} from "@/app/db/schema";
+} from "@/db/schema";
 import { listingFormSchema } from "../schema";
 import type { ListingFormValues } from "../schema";
 import { eq, or, like } from "drizzle-orm";

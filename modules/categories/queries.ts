@@ -1,5 +1,5 @@
-import { db } from "@/app/db";
-import { categories } from "@/app/db/schema";
+import { db } from "@/db";
+import { categories } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { inArray } from "drizzle-orm";
 

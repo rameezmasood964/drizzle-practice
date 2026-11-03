@@ -1,6 +1,6 @@
 // modules/listings/queries.ts
-import { db } from "@/app/db";
-import { listings, areas, categories, listingImages } from "@/app/db/schema";
+import { db } from "@/db";
+import { listings, areas, categories, listingImages } from "@/db/schema";
 
 import { eq, desc, ilike, and, or, sql, asc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -68,6 +68,9 @@ export async function getAdminListings({
         title: listings.title,
         slug: listings.slug,
         phone: listings.phone,
+        address: listings.address,
+        mapsUrl: listings.mapsUrl,
+        adminNotes: listings.adminNotes,
         status: listings.status,
         isFeatured: listings.isFeatured,
         createdAt: listings.createdAt,

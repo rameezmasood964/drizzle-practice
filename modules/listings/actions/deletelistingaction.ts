@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
-import { db } from "@/app/db";
-import { listings } from "@/app/db/schema";
+import { db } from "@/db";
+import { listings } from "@/db/schema";
 
 export async function deleteListingAction(id: number) {
   try {

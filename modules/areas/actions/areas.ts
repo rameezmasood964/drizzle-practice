@@ -1,7 +1,7 @@
 "use server";
 
-import { db } from "@/app/db";
-import { areas } from "@/app/db/schema";
+import { db } from "@/db";
+import { areas } from "@/db/schema";
 import { revalidatePath } from "next/cache";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { eq, sql } from "drizzle-orm";

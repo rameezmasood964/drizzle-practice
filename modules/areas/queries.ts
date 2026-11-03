@@ -1,6 +1,6 @@
 
-import { db } from "@/app/db";
-import { areas } from "@/app/db/schema";
+import { db } from "@/db";
+import { areas } from "@/db/schema";
 import { desc, eq, asc, ilike, sql } from "drizzle-orm";
 
 export interface GetAdminAreasParams {
