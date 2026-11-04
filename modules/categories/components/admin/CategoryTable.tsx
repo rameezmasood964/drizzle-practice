@@ -112,6 +112,9 @@ const CategoryTable = ({
   // Full category list fallback
   const fullCategoryList = allCategories || categories;
 
+  // Root categories only (strict 2-level hierarchy: only root categories can be parents)
+  const rootCategories = fullCategoryList.filter((c) => c.parentId === null);
+
   // Delete State
   const [categoryToDelete, setCategoryToDelete] = useState<{
     id: number;
@@ -211,7 +214,7 @@ const CategoryTable = ({
 
               <CategoryForm
                 onSuccess={() => setOpen(false)}
-                categories={fullCategoryList}
+                categories={rootCategories}
               />
             </DialogContent>
           </Dialog>
@@ -238,7 +241,7 @@ const CategoryTable = ({
                 setIsEditOpen(false);
                 setEditingCategory(null);
               }}
-              categories={fullCategoryList}
+              categories={rootCategories}
             />
           )}
         </DialogContent>

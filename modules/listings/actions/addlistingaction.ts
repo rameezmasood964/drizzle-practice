@@ -9,18 +9,14 @@ import {
 } from "@/db/schema";
 import { listingFormSchema } from "../schema";
 import type { ListingFormValues } from "../schema";
-import { eq, or, like } from "drizzle-orm";
+import { eq, or, like, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { createSlug } from "@/lib/utils";
 
 // 🛠️ Helper function jo unique slug guarantee karta hai
 async function generateUniqueSlug(rawInput: string): Promise<string> {
   // 1. Text ko clean karke standard slug banayein
-  const baseSlug = rawInput
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "") // special characters remove
-    .replace(/[\s_-]+/g, "-") // spaces ko dash banayein
-    .replace(/^-+|-+$/g, ""); // start/end dashes remove
+  const baseSlug = createSlug(rawInput);
 
   // 2. Database mein dhoondein ke kya is naam ya prefix se slugs mojood hain
   const existingMatches = await db
@@ -91,8 +87,8 @@ export async function createListingAction(formData: ListingFormValues) {
       : parentCatId;
 
     // 2. 🛡️ Dynamic Custom Fields DB Verification
-    const relevantCategoryIds = [parentCatId];
-    if (data.subCategoryId) {
+    const relevantCategoryIds: number[] = [parentCatId];
+    if (data.subCategoryId && data.subCategoryId.trim() !== "") {
       relevantCategoryIds.push(Number(data.subCategoryId));
     }
 
@@ -100,17 +96,39 @@ export async function createListingAction(formData: ListingFormValues) {
       .select()
       .from(categoryFields)
       .where(
-        relevantCategoryIds.length === 1
-          ? eq(categoryFields.categoryId, parentCatId)
-          : or(
-              eq(categoryFields.categoryId, parentCatId),
-              eq(categoryFields.categoryId, Number(data.subCategoryId)),
-            ),
+        and(
+          eq(categoryFields.isActive, true),
+          inArray(categoryFields.categoryId, relevantCategoryIds),
+        ),
       );
 
+    // Deduplicate fields by key: subcategory definition takes precedence over parent category
+    const subCatId =
+      data.subCategoryId && data.subCategoryId.trim() !== ""
+        ? Number(data.subCategoryId)
+        : null;
+    const fieldsMap = new Map<string, typeof categoryFields.$inferSelect>();
+
+    // Process parent category fields first
+    for (const field of dbCategoryFields) {
+      if (field.categoryId === parentCatId) {
+        fieldsMap.set(field.key, field);
+      }
+    }
+
+    // Overwrite with subcategory fields (child takes precedence)
+    if (subCatId) {
+      for (const field of dbCategoryFields) {
+        if (field.categoryId === subCatId) {
+          fieldsMap.set(field.key, field);
+        }
+      }
+    }
+
+    const deduplicatedFields = Array.from(fieldsMap.values());
     const customFieldsData = (data.customFields || {}) as Record<string, any>;
 
-    for (const field of dbCategoryFields) {
+    for (const field of deduplicatedFields) {
       if (field.type === "boolean") continue;
 
       if (field.isRequired) {
@@ -118,6 +136,7 @@ export async function createListingAction(formData: ListingFormValues) {
         const isEmpty =
           val === undefined ||
           val === null ||
+          (Array.isArray(val) && val.length === 0) ||
           (typeof val === "string" && val.trim() === "") ||
           (field.type === "number" && isNaN(Number(val)));
 

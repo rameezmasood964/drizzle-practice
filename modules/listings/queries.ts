@@ -10,7 +10,7 @@ const parentCategories = alias(categories, "parent_categories");
 
 export interface GetListingsParams {
   search?: string;
-  status?: "draft" | "pending" | "approved" | "rejected";
+  status?: "draft" | "pending" | "approved" | "rejected" | "incomplete";
   categoryId?: number;
   areaId?: number;
   limit?: number;
@@ -39,8 +39,8 @@ export async function getAdminListings({
       );
     }
 
-    // Status filter
-    if (status) {
+    // Status filter (skip 'incomplete' because it is a computed health check filter, not a DB enum)
+    if (status && status !== "incomplete") {
       conditions.push(eq(listings.status, status));
     }
 
@@ -73,6 +73,7 @@ export async function getAdminListings({
         adminNotes: listings.adminNotes,
         status: listings.status,
         isFeatured: listings.isFeatured,
+        details: listings.details,
         createdAt: listings.createdAt,
         // Joined Area
         area: {

@@ -18,12 +18,9 @@ export default function AddAreasForm({
 
   const [formData, setFormData] = useState({
     name: initialData?.name || "",
-    slug: initialData?.slug || "",
   });
 
-  const [errors, setErrors] = useState<{ name?: string[]; slug?: string[] }>(
-    {},
-  );
+  const [errors, setErrors] = useState<{ name?: string[] }>({});
 
   useEffect(() => {
     if (state?.errors) {
@@ -35,7 +32,7 @@ export default function AddAreasForm({
       setErrors({});
 
       if (!initialData) {
-        setFormData({ name: "", slug: "" });
+        setFormData({ name: "" });
       }
 
       if (onSuccess) {
@@ -45,29 +42,18 @@ export default function AddAreasForm({
       setFormData((prev) => ({
         ...prev,
         name: state.inputs?.name ?? prev.name,
-        slug: state.inputs?.slug ?? prev.slug,
       }));
     }
   }, [state, initialData, onSuccess]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value;
-    const generatedSlug = name
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, "")
-      .replace(/[\s_-]+/g, "-")
-      .replace(/^-+|-+$/g, "");
 
     if (errors.name) {
       setErrors((prev) => ({ ...prev, name: undefined }));
     }
 
-    setFormData((prev) => ({
-      ...prev,
-      name,
-      slug: initialData ? prev.slug : generatedSlug,
-    }));
+    setFormData({ name });
   };
 
   return (
@@ -97,29 +83,6 @@ export default function AddAreasForm({
         {errors.name && (
           <p className="text-xs font-medium text-destructive">
             {errors.name[0]}
-          </p>
-        )}
-      </div>
-
-      {/* Area Slug Input */}
-      <div className="space-y-2">
-        <Label htmlFor="area-slug">Slug (URL Identifier)</Label>
-        <Input
-          id="area-slug"
-          name="slug"
-          placeholder="e.g. model-town"
-          value={formData.slug}
-          onChange={(e) => {
-            if (errors.slug) {
-              setErrors((prev) => ({ ...prev, slug: undefined }));
-            }
-            setFormData((prev) => ({ ...prev, slug: e.target.value }));
-          }}
-          required
-        />
-        {errors.slug && (
-          <p className="text-xs font-medium text-destructive">
-            {errors.slug[0]}
           </p>
         )}
       </div>

@@ -47,6 +47,7 @@ export interface ListingFiltersProps {
 export interface ListingsTableProps {
   listings?: ListingItem[];
   pagination?: PaginationProps;
+  categoryFieldsMap?: Record<string, any[]>;
 }
 
 export interface ListingsDashboardWrapperProps {
@@ -54,6 +55,7 @@ export interface ListingsDashboardWrapperProps {
   listings?: ListingItem[];
   categories?: CategoryFilterOption[];
   pagination?: PaginationProps;
+  categoryFieldsMap?: Record<string, any[]>;
 }
 
 // ==========================================

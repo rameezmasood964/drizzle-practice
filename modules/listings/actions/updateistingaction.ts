@@ -1,24 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, ne, eq, like, notInArray } from "drizzle-orm";
+import { and, ne, eq, like, notInArray, or } from "drizzle-orm";
 
 import { db } from "@/db";
-import { listings, listingImages } from "@/db/schema";
+import { listings, listingImages, categories, categoryFields } from "@/db/schema";
 import { listingFormSchema } from "../schema";
 import type { ListingFormValues } from "../types";
+import { createSlug } from "@/lib/utils";
 
 // Update ke waqt collision check (apni current listing ko chhor kar check karega)
 async function generateUniqueSlugForUpdate(
   rawInput: string,
   currentId: number,
 ): Promise<string> {
-  const baseSlug = rawInput
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  const baseSlug = createSlug(rawInput);
 
   const existingMatches = await db
     .select({ slug: listings.slug, id: listings.id })
@@ -58,15 +54,143 @@ export async function updateListingAction(
     }
 
     const data = validatedData.data;
-    const parentCatId = Number(data.categoryId);
-    const targetCategoryId = data.subCategoryId
-      ? Number(data.subCategoryId)
-      : parentCatId;
 
-    // 1. Slug check
+    // 1. Fetch existing listing with category information from DB
+    const [existingListing] = await db
+      .select({
+        id: listings.id,
+        categoryId: listings.categoryId,
+        categoryParentId: categories.parentId,
+        details: listings.details,
+      })
+      .from(listings)
+      .leftJoin(categories, eq(listings.categoryId, categories.id))
+      .where(eq(listings.id, id))
+      .limit(1);
+
+    if (!existingListing) {
+      return {
+        success: false,
+        message: "Listing nahi mili.",
+      };
+    }
+
+    let finalCategoryId = existingListing.categoryId;
+    const isExistingRoot = existingListing.categoryParentId === null;
+
+    if (isExistingRoot) {
+      // Listing was assigned directly to a root parent category
+      if (data.subCategoryId && data.subCategoryId.trim() !== "") {
+        const subCatIdNum = Number(data.subCategoryId);
+        // Validate that this subcategory belongs to the existing listing's parent category
+        const [validSubCategory] = await db
+          .select({
+            id: categories.id,
+            parentId: categories.parentId,
+          })
+          .from(categories)
+          .where(
+            and(
+              eq(categories.id, subCatIdNum),
+              eq(categories.parentId, existingListing.categoryId),
+            ),
+          )
+          .limit(1);
+
+        if (!validSubCategory) {
+          return {
+            success: false,
+            message: "Selected sub-category does not belong to this category.",
+            errors: {
+              subCategoryId: ["Invalid sub-category for this parent category"],
+            },
+          };
+        }
+
+        finalCategoryId = validSubCategory.id;
+      }
+    } else {
+      // Listing already had a subcategory assigned:
+      // Category and subcategory cannot be changed. Enforce integrity by keeping finalCategoryId as existingListing.categoryId.
+      finalCategoryId = existingListing.categoryId;
+    }
+
+    // 2. 🛡️ Dynamic Custom Fields DB Verification
+    const relevantCategoryIds = isExistingRoot
+      ? finalCategoryId !== existingListing.categoryId
+        ? [existingListing.categoryId, finalCategoryId]
+        : [existingListing.categoryId]
+      : [existingListing.categoryParentId!, existingListing.categoryId];
+
+    const dbCategoryFields = await db
+      .select()
+      .from(categoryFields)
+      .where(
+        and(
+          eq(categoryFields.isActive, true),
+          relevantCategoryIds.length === 1
+            ? eq(categoryFields.categoryId, relevantCategoryIds[0])
+            : or(
+                eq(categoryFields.categoryId, relevantCategoryIds[0]),
+                eq(categoryFields.categoryId, relevantCategoryIds[1]),
+              ),
+        ),
+      );
+
+    const existingDetails = (existingListing.details || {}) as Record<
+      string,
+      any
+    >;
+    const customFieldsData = (data.customFields || {}) as Record<string, any>;
+
+    for (const field of dbCategoryFields) {
+      if (field.type === "boolean") continue;
+
+      if (field.isRequired) {
+        const val = customFieldsData[field.key];
+        const isEmpty =
+          val === undefined ||
+          val === null ||
+          (Array.isArray(val) && val.length === 0) ||
+          (typeof val === "string" && val.trim() === "") ||
+          (field.type === "number" && isNaN(Number(val)));
+
+        if (isEmpty) {
+          // Graceful handling for older listings:
+          // If this field was NOT present in the original listing's details JSONB
+          // (i.e. it is a newly introduced required category field), allow the update without error.
+          const wasPresentInOriginal =
+            field.key in existingDetails &&
+            existingDetails[field.key] !== undefined &&
+            existingDetails[field.key] !== null &&
+            (typeof existingDetails[field.key] === "string"
+              ? existingDetails[field.key].trim() !== ""
+              : true) &&
+            (Array.isArray(existingDetails[field.key])
+              ? existingDetails[field.key].length > 0
+              : true);
+
+          if (!wasPresentInOriginal) {
+            continue;
+          }
+
+          return {
+            success: false,
+            message: `${field.label || field.key} bharna lazmi hai.`,
+            errors: {
+              [`customFields.${field.key}`]: [
+                `${field.label || field.key} required hai`,
+              ],
+            },
+          };
+        }
+      }
+    }
+
+    // 3. Slug check
     const finalUniqueSlug = await generateUniqueSlugForUpdate(data.title, id);
 
-    // 2. Business hours format
+    // 4. Business hours format
     const formattedBusinessHours: Record<
       string,
       { isOpen: boolean; open: string; close: string }
@@ -89,7 +213,13 @@ export async function updateListingAction(
       }
     }
 
-    // 3. Database Main Listing Update
+    // Merge existing details with updated custom fields so partial updates do not wipe out unsubmitted keys
+    const mergedDetails = {
+      ...existingDetails,
+      ...customFieldsData,
+    };
+
+    // 5. Database Main Listing Update
     const [updatedListing] = await db
       .update(listings)
       .set({
@@ -104,8 +234,8 @@ export async function updateListingAction(
         landmark: data.landmark || null,
         mapsUrl: data.mapsUrl,
         areaId: Number(data.areaId),
-        categoryId: targetCategoryId,
-        details: (data.customFields || {}) as Record<string, any>,
+        categoryId: finalCategoryId,
+        details: mergedDetails,
         businessHours: formattedBusinessHours,
         status: data.status,
         isFeatured: Boolean(data.isFeatured),
@@ -114,7 +244,7 @@ export async function updateListingAction(
       .where(eq(listings.id, id))
       .returning();
 
-    // 4. 🖼️ IMAGES SYNC LOGIC (Purani vs Nayi Images Handle Karna)
+    // 6. 🖼️ IMAGES SYNC LOGIC (Purani vs Nayi Images Handle Karna)
     if (data.images && data.images.length > 0) {
       // (A) DB mein pehle se mojood images fetch karein
       const existingDbImages = await db
@@ -183,6 +313,7 @@ export async function updateListingAction(
     }
 
     revalidatePath("/admin/listings");
+    revalidatePath(`/admin/listings/${id}/edit`);
     revalidatePath(`/listings/${finalUniqueSlug}`);
 
     return {

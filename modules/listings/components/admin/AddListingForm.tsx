@@ -180,8 +180,9 @@ export default function AddListingForm({
   const {
     handleSubmit,
     setError,
+    clearErrors,
     reset,
-    formState: { isSubmitting },
+    formState: { isSubmitting, dirtyFields },
   } = methods;
 
   // React Hook Form ko fresh initialData ke sath re-sync karein jab categories load ho jayein
@@ -285,6 +286,8 @@ export default function AddListingForm({
     }
 
     // 3. 🛡️ Dynamic Custom Fields Check & Scroll
+    clearErrors("customFields");
+
     const parentFields = data.categoryId
       ? categoryFieldsMap[String(data.categoryId)] || []
       : [];
@@ -296,7 +299,10 @@ export default function AddListingForm({
     const activeFields = [
       ...childFields,
       ...parentFields.filter((pf: any) => !childKeys.has(pf.key)),
-    ];
+    ].filter((f: any) => f.isActive !== false);
+
+    const isEditMode = Boolean(isEditing || initialData?.id);
+    const initialDetails = (initialData?.details || {}) as Record<string, any>;
 
     let firstMissingKey: string | null = null;
 
@@ -308,10 +314,30 @@ export default function AddListingForm({
       const isEmpty =
         val === undefined ||
         val === null ||
+        (Array.isArray(val) && val.length === 0) ||
         (typeof val === "string" && val.trim() === "") ||
-        (field.type === "number" && isNaN(Number(val)));
+        (field.type === "number" && (val === "" || isNaN(Number(val))));
 
       if (field.isRequired && isEmpty) {
+        if (isEditMode) {
+          // Check if field was originally filled in the listing
+          const wasPresentInOriginal =
+            fieldKey in initialDetails &&
+            initialDetails[fieldKey] !== undefined &&
+            initialDetails[fieldKey] !== null &&
+            (typeof initialDetails[fieldKey] === "string"
+              ? initialDetails[fieldKey].trim() !== ""
+              : true) &&
+            (Array.isArray(initialDetails[fieldKey])
+              ? initialDetails[fieldKey].length > 0
+              : true);
+
+          // Legacy listings: if newly introduced field was not in original details, NEVER block submission
+          if (!wasPresentInOriginal) {
+            continue;
+          }
+        }
+
         setError(`customFields.${fieldKey}` as any, {
           type: "manual",
           message: `${field.label || fieldKey} bharna lazmi hai.`,
@@ -475,13 +501,25 @@ export default function AddListingForm({
             <BasicInfoSection />
             <ContactSection />
             <LocationSection areas={areas} />
-            <CustomFieldsSection categoryFieldsMap={categoryFieldsMap} />
+            <CustomFieldsSection
+              categoryFieldsMap={categoryFieldsMap}
+              initialData={initialData}
+              isEditing={isEditing}
+            />
             <MediaSection />
           </div>
 
           {/* Right Column */}
           <div className="space-y-6 lg:col-span-5 xl:col-span-4">
-            <CategorySection categories={categories} isEditing={isEditing} />
+            <CategorySection
+              categories={categories}
+              isEditing={isEditing}
+              initialSubCategoryId={
+                initialCatState.subCatId ||
+                initialData?.resolvedSubCategoryId ||
+                ""
+              }
+            />
             <StatusSection />
             <BusinessHoursSection />
           </div>

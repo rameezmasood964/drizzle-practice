@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { SlidersHorizontal, Sparkles } from "lucide-react";
 import { useFormContext, Controller } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -16,19 +18,45 @@ import {
 } from "@/components/ui/select";
 import type { ListingFormValues } from "@/modules/listings/types";
 
+function parseOptions(rawOptions: unknown): string[] {
+  if (Array.isArray(rawOptions)) {
+    return rawOptions
+      .map(String)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  if (typeof rawOptions === "string" && rawOptions.trim() !== "") {
+    return rawOptions
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 interface CustomFieldsSectionProps {
   categoryFieldsMap?: Record<string, any[]>;
+  initialData?: any;
+  isEditing?: boolean;
 }
 
 const CustomFieldsSection = ({
   categoryFieldsMap = {},
+  initialData,
+  isEditing = false,
 }: CustomFieldsSectionProps) => {
   const {
     register,
     control,
     watch,
+    clearErrors,
     formState: { errors },
   } = useFormContext<ListingFormValues>();
+
+  const isEditMode = Boolean(isEditing || initialData?.id);
+  const initialDetails = useMemo(() => {
+    return (initialData?.details || {}) as Record<string, any>;
+  }, [initialData]);
 
   const categoryId = watch("categoryId");
   const subCategoryId = watch("subCategoryId");
@@ -53,6 +81,28 @@ const CustomFieldsSection = ({
 
     return [...childFields, ...inheritedParentFields];
   }, [categoryId, subCategoryId, categoryFieldsMap]);
+
+  // Clear any existing errors for fields that are optional for this legacy listing on mount
+  useEffect(() => {
+    if (isEditMode && fields.length > 0) {
+      fields.forEach((field) => {
+        const wasPresent =
+          field.key in initialDetails &&
+          initialDetails[field.key] !== undefined &&
+          initialDetails[field.key] !== null &&
+          (typeof initialDetails[field.key] === "string"
+            ? initialDetails[field.key].trim() !== ""
+            : true) &&
+          (Array.isArray(initialDetails[field.key])
+            ? initialDetails[field.key].length > 0
+            : true);
+
+        if (!wasPresent) {
+          clearErrors(`customFields.${field.key}` as any);
+        }
+      });
+    }
+  }, [isEditMode, fields, initialDetails, clearErrors]);
 
   return (
     <Card className="border-border bg-card shadow-sm">
@@ -92,17 +142,41 @@ const CustomFieldsSection = ({
               const placeholderText =
                 field.placeholder || `Enter ${displayName.toLowerCase()}`;
 
+              // Legacy listings: Check if field was originally filled in initial details
+              const wasPresentInOriginal =
+                isEditMode &&
+                field.key in initialDetails &&
+                initialDetails[field.key] !== undefined &&
+                initialDetails[field.key] !== null &&
+                (typeof initialDetails[field.key] === "string"
+                  ? initialDetails[field.key].trim() !== ""
+                  : true) &&
+                (Array.isArray(initialDetails[field.key])
+                  ? initialDetails[field.key].length > 0
+                  : true);
+
+              const isLegacyMissing =
+                isEditMode && field.isRequired && !wasPresentInOriginal;
+
+              const isEffectiveRequired =
+                field.isRequired && (!isEditMode || wasPresentInOriginal);
+
               // 1. Text Field
               if (field.type === "text") {
                 return (
                   <div key={field.id || field.key} className="space-y-1.5">
                     <Label
                       htmlFor={`customField-${field.key}`}
-                      className="text-sm font-medium"
+                      className="text-sm font-medium flex items-center gap-1.5 flex-wrap"
                     >
-                      {displayName}{" "}
-                      {field.isRequired && (
+                      <span>{displayName}</span>
+                      {isEffectiveRequired && (
                         <span className="text-destructive">*</span>
+                      )}
+                      {isLegacyMissing && (
+                        <span className="text-[11px] font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/50">
+                          Optional for this listing
+                        </span>
                       )}
                     </Label>
                     <Input
@@ -113,7 +187,14 @@ const CustomFieldsSection = ({
                           ? "border-destructive focus-visible:ring-destructive"
                           : ""
                       }`}
-                      {...register(fieldName)}
+                      {...register(fieldName, {
+                        required: isEffectiveRequired
+                          ? `${displayName} bharna lazmi hai.`
+                          : false,
+                        onChange: () => {
+                          if (fieldError) clearErrors(fieldName as any);
+                        },
+                      })}
                     />
                     {fieldError && (
                       <p className="text-xs text-destructive">
@@ -135,11 +216,16 @@ const CustomFieldsSection = ({
                   <div key={field.id || field.key} className="space-y-1.5">
                     <Label
                       htmlFor={`customField-${field.key}`}
-                      className="text-sm font-medium"
+                      className="text-sm font-medium flex items-center gap-1.5 flex-wrap"
                     >
-                      {displayName}{" "}
-                      {field.isRequired && (
+                      <span>{displayName}</span>
+                      {isEffectiveRequired && (
                         <span className="text-destructive">*</span>
+                      )}
+                      {isLegacyMissing && (
+                        <span className="text-[11px] font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/50">
+                          Optional for this listing
+                        </span>
                       )}
                     </Label>
                     <Input
@@ -151,7 +237,15 @@ const CustomFieldsSection = ({
                           ? "border-destructive focus-visible:ring-destructive"
                           : ""
                       }`}
-                      {...register(fieldName, { valueAsNumber: true })}
+                      {...register(fieldName, {
+                        valueAsNumber: true,
+                        required: isEffectiveRequired
+                          ? `${displayName} bharna lazmi hai.`
+                          : false,
+                        onChange: () => {
+                          if (fieldError) clearErrors(fieldName as any);
+                        },
+                      })}
                     />
                     {fieldError && (
                       <p className="text-xs text-destructive">
@@ -169,27 +263,38 @@ const CustomFieldsSection = ({
 
               // 3. Dropdown (Select) Field
               if (field.type === "select") {
-                const options = Array.isArray(field.options)
-                  ? field.options
-                  : [];
+                const options = parseOptions(field.options);
                 return (
                   <div key={field.id || field.key} className="space-y-1.5">
                     <Label
                       htmlFor={`customField-${field.key}`}
-                      className="text-sm font-medium"
+                      className="text-sm font-medium flex items-center gap-1.5 flex-wrap"
                     >
-                      {displayName}{" "}
-                      {field.isRequired && (
+                      <span>{displayName}</span>
+                      {isEffectiveRequired && (
                         <span className="text-destructive">*</span>
+                      )}
+                      {isLegacyMissing && (
+                        <span className="text-[11px] font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/50">
+                          Optional for this listing
+                        </span>
                       )}
                     </Label>
                     <Controller
                       control={control}
                       name={fieldName}
+                      rules={
+                        isEffectiveRequired
+                          ? { required: `${displayName} bharna lazmi hai.` }
+                          : undefined
+                      }
                       render={({ field: selectField }) => (
                         <Select
                           value={(selectField.value as string) || ""}
-                          onValueChange={selectField.onChange}
+                          onValueChange={(val) => {
+                            selectField.onChange(val);
+                            if (fieldError) clearErrors(fieldName as any);
+                          }}
                         >
                           <SelectTrigger
                             id={`customField-${field.key}`}
@@ -229,7 +334,159 @@ const CustomFieldsSection = ({
                 );
               }
 
-              // 4. Boolean (Switch Toggle) Field
+              // 4. Multi-Select (Checkbox Group / Badges) Field
+              if (
+                field.type === "multiselect" ||
+                (field.type as string) === "multi-select"
+              ) {
+                const options = parseOptions(field.options);
+                return (
+                  <div
+                    key={field.id || field.key}
+                    className="space-y-2 col-span-1 md:col-span-2"
+                  >
+                    <Label className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
+                      <span>{displayName}</span>
+                      {isEffectiveRequired && (
+                        <span className="text-destructive">*</span>
+                      )}
+                      {isLegacyMissing && (
+                        <span className="text-[11px] font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/50">
+                          Optional for this listing
+                        </span>
+                      )}
+                    </Label>
+                    <Controller
+                      control={control}
+                      name={fieldName}
+                      defaultValue={[]}
+                      rules={
+                        isEffectiveRequired
+                          ? {
+                              validate: (val) =>
+                                (Array.isArray(val) && val.length > 0) ||
+                                `${displayName} bharna lazmi hai.`,
+                            }
+                          : undefined
+                      }
+                      render={({ field: controllerField }) => {
+                        const currentValue: string[] = Array.isArray(
+                            controllerField.value,
+                          )
+                          ? controllerField.value
+                          : [];
+
+                        if (options.length === 0) {
+                          return (
+                            <p className="text-xs text-muted-foreground italic">
+                              No options configured for this multi-select field.
+                            </p>
+                          );
+                        }
+
+                        return (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {options.map((opt: string) => {
+                              const isChecked = currentValue.includes(opt);
+                              return (
+                                <label
+                                  key={opt}
+                                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer transition-all select-none ${
+                                    isChecked
+                                      ? "border-primary bg-primary/10 text-primary shadow-xs"
+                                      : "border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                  }`}
+                                >
+                                  <Checkbox
+                                    checked={isChecked}
+                                    onCheckedChange={(checked) => {
+                                      const nextValue = checked
+                                        ? [...currentValue, opt]
+                                        : currentValue.filter(
+                                            (item) => item !== opt,
+                                          );
+                                      controllerField.onChange(nextValue);
+                                      if (fieldError)
+                                        clearErrors(fieldName as any);
+                                    }}
+                                    className="data-checked:bg-primary data-checked:text-primary-foreground"
+                                  />
+                                  <span>{opt}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        );
+                      }}
+                    />
+                    {fieldError && (
+                      <p className="text-xs text-destructive">
+                        {fieldError.message as string}
+                      </p>
+                    )}
+                    {field.helpText && !fieldError && (
+                      <p className="text-xs text-muted-foreground">
+                        {field.helpText}
+                      </p>
+                    )}
+                  </div>
+                );
+              }
+
+              // 5. Textarea Field
+              if (field.type === "textarea") {
+                return (
+                  <div
+                    key={field.id || field.key}
+                    className="space-y-1.5 col-span-1 md:col-span-2"
+                  >
+                    <Label
+                      htmlFor={`customField-${field.key}`}
+                      className="text-sm font-medium flex items-center gap-1.5 flex-wrap"
+                    >
+                      <span>{displayName}</span>
+                      {isEffectiveRequired && (
+                        <span className="text-destructive">*</span>
+                      )}
+                      {isLegacyMissing && (
+                        <span className="text-[11px] font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/50">
+                          Optional for this listing
+                        </span>
+                      )}
+                    </Label>
+                    <Textarea
+                      id={`customField-${field.key}`}
+                      placeholder={placeholderText}
+                      rows={3}
+                      className={`bg-background resize-y ${
+                        fieldError
+                          ? "border-destructive focus-visible:ring-destructive"
+                          : ""
+                      }`}
+                      {...register(fieldName, {
+                        required: isEffectiveRequired
+                          ? `${displayName} bharna lazmi hai.`
+                          : false,
+                        onChange: () => {
+                          if (fieldError) clearErrors(fieldName as any);
+                        },
+                      })}
+                    />
+                    {fieldError && (
+                      <p className="text-xs text-destructive">
+                        {fieldError.message as string}
+                      </p>
+                    )}
+                    {field.helpText && !fieldError && (
+                      <p className="text-xs text-muted-foreground">
+                        {field.helpText}
+                      </p>
+                    )}
+                  </div>
+                );
+              }
+
+              // 6. Boolean (Switch Toggle) Field
               if (field.type === "boolean") {
                 return (
                   <div
@@ -257,7 +514,10 @@ const CustomFieldsSection = ({
                         <Switch
                           id={`customField-${field.key}`}
                           checked={Boolean(switchField.value)}
-                          onCheckedChange={switchField.onChange}
+                          onCheckedChange={(checked) => {
+                            switchField.onChange(checked);
+                            if (fieldError) clearErrors(fieldName as any);
+                          }}
                         />
                       )}
                     />

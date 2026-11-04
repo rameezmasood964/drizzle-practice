@@ -6,8 +6,9 @@ import { revalidatePath } from "next/cache";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { eq, sql } from "drizzle-orm";
 import { areaSchema, updateAreaSchema } from "../schema";
+import { createSlug } from "@/lib/utils";
 
-function handleAreaDbError(error: any, inputs?: { name?: string; slug?: string }) {
+function handleAreaDbError(error: any, inputs?: { name?: string }) {
   const pgError = error.cause || error;
   const errorCode = pgError.code || error.code;
   const constraintName = pgError.constraint_name || error.constraint_name || "";
@@ -17,7 +18,8 @@ function handleAreaDbError(error: any, inputs?: { name?: string; slug?: string }
     if (constraintName.includes("slug")) {
       return {
         success: false,
-        errors: { slug: ["This slug already exists. Kindly change it."] },
+        errors: { name: ["An area with a similar name/slug already exists."] },
+        message: "An area with a similar name or slug already exists. Please choose a different name.",
         inputs,
       };
     }
@@ -59,13 +61,23 @@ export async function addArea(prevState: any, formdata: FormData) {
       message: "Please fix the errors below.",
       inputs: {
         name: (rawdata.name as string) || "",
-        slug: (rawdata.slug as string) || "",
       },
     };
   }
 
-  const { name, slug } = result.data;
-  const inputs = { name, slug };
+  const { name } = result.data;
+  const slug = createSlug(name);
+
+  if (!slug) {
+    return {
+      success: false,
+      errors: { name: ["Please enter a valid area name that can produce a URL slug."] },
+      message: "Area name must produce a valid URL slug.",
+      inputs: { name },
+    };
+  }
+
+  const inputs = { name };
 
   try {
     const existingArea = await db.query.areas.findFirst({
@@ -119,19 +131,21 @@ export async function updateArea(prevState: any, formdata: FormData) {
       success: false,
       errors: result.error.flatten().fieldErrors,
       message: "Please fix the errors below.",
+      inputs: {
+        name: (rawdata.name as string) || "",
+      },
     };
   }
 
-  const { id, name, slug } = result.data;
+  const { id, name } = result.data;
   const areaId = parseInt(id, 10);
 
   try {
+    // Slugs are strictly immutable during edits to protect SEO and existing URLs
     const updated = await db
       .update(areas)
       .set({
         name,
-        slug,
-        // isActive yahan se nikaal diya!
       })
       .where(eq(areas.id, areaId))
       .returning({ id: areas.id });
@@ -144,7 +158,7 @@ export async function updateArea(prevState: any, formdata: FormData) {
     return { success: true, message: "Area updated successfully!" };
   } catch (error: any) {
     if (isRedirectError(error)) throw error;
-    return handleAreaDbError(error, { name, slug });
+    return handleAreaDbError(error, { name });
   }
 }
 /* ----------------------- TOGGLE AREA STATUS (SWITCH) ----------------------- */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
@@ -21,6 +21,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  AlertTriangle,
 } from "lucide-react";
 
 import {
@@ -56,11 +57,16 @@ import {
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { deleteListingAction } from "@/modules/listings/actions/deletelistingaction";
 import {
+  bulkUpdateListingStatusAction,
+  bulkDeleteListingsAction,
+} from "@/modules/listings/actions/bulkListingsActions";
+import {
   updateListingStatusAction,
   toggleListingFeaturedAction,
   type ListingStatusType,
 } from "@/modules/listings/actions/updateListingStatusAction";
 import { ListingsTableProps } from "@/modules/listings/types";
+import { checkListingCompleteness } from "@/modules/listings/utils/completeness";
 
 // Common rejection presets for fast selection
 const REJECTION_PRESETS = [
@@ -86,7 +92,11 @@ const getStatusBadgeVariant = (
   }
 };
 
-const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
+const ListingsTable = ({
+  listings = [],
+  pagination,
+  categoryFieldsMap = {},
+}: ListingsTableProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -94,6 +104,36 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
   const currentPage = pagination?.currentPage || 1;
   const totalPages = pagination?.totalPages || 1;
   const totalCount = pagination?.totalCount || 0;
+
+  // 5. Incomplete / Needs Update Computation
+  const completenessMap = useMemo(() => {
+    const map = new Map<number, ReturnType<typeof checkListingCompleteness>>();
+    for (const item of listings) {
+      map.set(item.id, checkListingCompleteness(item, categoryFieldsMap));
+    }
+    return map;
+  }, [listings, categoryFieldsMap]);
+
+  const incompleteCount = useMemo(() => {
+    let count = 0;
+    for (const res of completenessMap.values()) {
+      if (!res.isComplete) count++;
+    }
+    return count;
+  }, [completenessMap]);
+
+  const isStatusIncompleteFilter = searchParams.get("status") === "incomplete";
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
+
+  const isFilteringIncomplete = isStatusIncompleteFilter || showIncompleteOnly;
+
+  const displayListings = useMemo(() => {
+    if (!isFilteringIncomplete) return listings;
+    return listings.filter((item) => {
+      const res = completenessMap.get(item.id);
+      return res && !res.isComplete;
+    });
+  }, [listings, isFilteringIncomplete, completenessMap]);
 
   const goToPage = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages || newPage === currentPage) return;
@@ -119,6 +159,71 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
     title: string;
   } | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
+
+  // 4. Bulk Actions State
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
+  const [isBulkLoading, startBulkTransition] = useTransition();
+
+  const isAllSelected =
+    displayListings.length > 0 &&
+    displayListings.every((item) => selectedIds.includes(item.id));
+  const isSomeSelected = selectedIds.length > 0 && !isAllSelected;
+
+  const handleSelectAll = (checked: boolean | "indeterminate") => {
+    if (checked) {
+      const pageIds = displayListings.map((l) => l.id);
+      setSelectedIds(Array.from(new Set([...selectedIds, ...pageIds])));
+    } else {
+      const pageIdsSet = new Set(displayListings.map((l) => l.id));
+      setSelectedIds(selectedIds.filter((id) => !pageIdsSet.has(id)));
+    }
+  };
+
+  const handleToggleRow = (id: number, checked: boolean | "indeterminate") => {
+    if (checked) {
+      setSelectedIds((prev) => [...prev, id]);
+    } else {
+      setSelectedIds((prev) => prev.filter((item) => item !== id));
+    }
+  };
+
+  const handleBulkStatus = (status: "approved" | "rejected") => {
+    if (selectedIds.length === 0) return;
+
+    startBulkTransition(async () => {
+      try {
+        const res = await bulkUpdateListingStatusAction(selectedIds, status);
+        if (res.success) {
+          toast.success(res.message);
+          setSelectedIds([]);
+        } else {
+          toast.error(res.message);
+        }
+      } catch (error) {
+        toast.error("Failed to update status for selected listings.");
+      }
+    });
+  };
+
+  const handleBulkDeleteConfirm = () => {
+    if (selectedIds.length === 0) return;
+
+    startBulkTransition(async () => {
+      try {
+        const res = await bulkDeleteListingsAction(selectedIds);
+        if (res.success) {
+          toast.success(res.message);
+          setSelectedIds([]);
+          setIsBulkDeleteConfirmOpen(false);
+        } else {
+          toast.error(res.message);
+        }
+      } catch (error) {
+        toast.error("Failed to delete selected listings.");
+      }
+    });
+  };
 
   // Delete confirm action handler
   const handleDeleteConfirm = () => {
@@ -198,13 +303,54 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
 
   return (
     <>
+      {/* Quick Filter toggle for Needs Update / Incomplete details */}
+      {incompleteCount > 0 && (
+        <div className="flex items-center justify-between mb-3 px-1">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={isFilteringIncomplete ? "secondary" : "outline"}
+              onClick={() => setShowIncompleteOnly(!showIncompleteOnly)}
+              className={`h-7 text-xs gap-1.5 cursor-pointer transition-colors ${
+                isFilteringIncomplete
+                  ? "border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-400 font-medium"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+              <span>
+                {isFilteringIncomplete
+                  ? "Showing Needs Update"
+                  : `Needs Update (${incompleteCount})`}
+              </span>
+            </Button>
+            {isFilteringIncomplete && (
+              <span className="text-xs text-muted-foreground">
+                Showing {displayListings.length} of {listings.length} listings with missing required fields
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="rounded-md border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               {/* 1. Checkbox */}
               <TableHead className="w-[48px] px-4">
-                <Checkbox aria-label="Select all" />
+                <Checkbox
+                  checked={
+                    isAllSelected
+                      ? true
+                      : isSomeSelected
+                        ? "indeterminate"
+                        : false
+                  }
+                  onCheckedChange={handleSelectAll}
+                  aria-label="Select all listings on this page"
+                />
               </TableHead>
 
               {/* 2. Thumbnail */}
@@ -228,21 +374,32 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
           </TableHeader>
 
           <TableBody>
-            {listings.length === 0 ? (
+            {displayListings.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={7}
                   className="h-32 text-center text-muted-foreground"
                 >
-                  No listings found.
+                  {isFilteringIncomplete
+                    ? "No listings with incomplete details found."
+                    : "No listings found."}
                 </TableCell>
               </TableRow>
             ) : (
-              listings.map((item) => (
-                <TableRow key={item.id} className="hover:bg-muted/50">
+              displayListings.map((item) => (
+                <TableRow
+                  key={item.id}
+                  className={`hover:bg-muted/50 ${selectedIds.includes(item.id) ? "bg-muted/30" : ""}`}
+                >
                   {/* 1. Row Checkbox */}
                   <TableCell className="px-4">
-                    <Checkbox aria-label={`Select ${item.title}`} />
+                    <Checkbox
+                      checked={selectedIds.includes(item.id)}
+                      onCheckedChange={(checked) =>
+                        handleToggleRow(item.id, checked)
+                      }
+                      aria-label={`Select ${item.title}`}
+                    />
                   </TableCell>
 
                   {/* 2. Image / Thumbnail */}
@@ -336,23 +493,57 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
                     </Badge>
                   </TableCell>
 
-                  {/* 5. Status Badge */}
+                  {/* 5. Status Badge & Health Check */}
                   <TableCell>
                     <div className="flex flex-col gap-1 items-start">
-                      <Badge
-                        variant={getStatusBadgeVariant(item.status)}
-                        className={`capitalize font-medium ${
-                          item.status === "approved"
-                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
-                            : item.status === "pending"
-                            ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
-                            : item.status === "rejected"
-                            ? "bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30"
-                            : ""
-                        }`}
-                      >
-                        {item.status}
-                      </Badge>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge
+                          variant={getStatusBadgeVariant(item.status)}
+                          className={`capitalize font-medium ${
+                            item.status === "approved"
+                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                              : item.status === "pending"
+                              ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                              : item.status === "rejected"
+                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30"
+                              : ""
+                          }`}
+                        >
+                          {item.status}
+                        </Badge>
+
+                        {/* Incomplete Details Warning Badge */}
+                        {(() => {
+                          const completeness = completenessMap.get(item.id);
+                          if (!completeness || completeness.isComplete) return null;
+                          const missingLabels = completeness.missingFields
+                            .map((f) => f.label)
+                            .join(", ");
+
+                          return (
+                            <div className="relative group/tooltip inline-block">
+                              <Badge
+                                variant="outline"
+                                title={`Missing required fields: ${missingLabels}`}
+                                className="border-amber-500/40 text-amber-700 dark:text-amber-400 bg-amber-500/10 gap-1 text-[10px] font-medium px-1.5 py-0.5 cursor-help"
+                              >
+                                <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-amber-500" />
+                                <span>Incomplete</span>
+                              </Badge>
+                              <div className="pointer-events-none absolute bottom-full left-0 mb-1.5 hidden w-max max-w-[240px] rounded-md bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-lg border border-border group-hover/tooltip:flex flex-col gap-0.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                                <span className="font-semibold text-foreground text-[11px] flex items-center gap-1">
+                                  <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                                  Missing required details ({completeness.missingCount}):
+                                </span>
+                                <span className="text-muted-foreground text-[10px] leading-snug">
+                                  {missingLabels}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
                       {item.status === "rejected" && item.adminNotes && (
                         <span
                           className="text-[11px] text-rose-600 dark:text-rose-400 line-clamp-1 max-w-[150px]"
@@ -716,6 +907,83 @@ const ListingsTable = ({ listings = [], pagination }: ListingsTableProps) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 5. Floating Bulk Actions Bar */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center flex-wrap gap-3 px-4 py-3 bg-card/95 backdrop-blur-md border border-border rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200 max-w-[calc(100vw-2rem)]">
+          <div className="flex items-center gap-2 pr-3 border-r border-border shrink-0">
+            <Badge variant="secondary" className="font-semibold text-xs px-2 py-0.5">
+              {selectedIds.length}
+            </Badge>
+            <span className="text-sm font-medium text-foreground whitespace-nowrap">
+              listing{selectedIds.length > 1 ? "s" : ""} selected
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              type="button"
+              size="sm"
+              variant="default"
+              className="h-8 gap-1.5 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={isBulkLoading}
+              onClick={() => handleBulkStatus("approved")}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span>{isBulkLoading ? "Updating..." : "Approve Selected"}</span>
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 cursor-pointer text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 border-amber-300 dark:border-amber-900/50"
+              disabled={isBulkLoading}
+              onClick={() => handleBulkStatus("rejected")}
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              <span>{isBulkLoading ? "Updating..." : "Reject Selected"}</span>
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              className="h-8 gap-1.5 cursor-pointer"
+              disabled={isBulkLoading}
+              onClick={() => setIsBulkDeleteConfirmOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>{isBulkLoading ? "Deleting..." : "Delete Selected"}</span>
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 cursor-pointer text-muted-foreground hover:text-foreground"
+              disabled={isBulkLoading}
+              onClick={() => setSelectedIds([])}
+            >
+              Deselect All
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Bulk Delete Confirm Dialog */}
+      <ConfirmDialog
+        open={isBulkDeleteConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open) setIsBulkDeleteConfirmOpen(false);
+        }}
+        title={`Delete ${selectedIds.length} Listing${selectedIds.length > 1 ? "s" : ""}`}
+        description={`Kya aap waqayi in ${selectedIds.length} listings ko permanently delete karna chahte hain? Yeh hard delete hai aur iska data recover nahi ho sakega.`}
+        confirmText={isBulkLoading ? "Deleting..." : "Delete Permanently"}
+        cancelText="Cancel"
+        isLoading={isBulkLoading}
+        onConfirm={handleBulkDeleteConfirm}
+      />
     </>
   );
 };

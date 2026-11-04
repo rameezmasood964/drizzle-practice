@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { FolderTree, Lock } from "lucide-react";
+import { FolderTree, Lock, Sparkles } from "lucide-react";
 import { useFormContext, Controller } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -33,11 +33,13 @@ interface Category {
 interface CategorySectionProps {
   categories?: Category[];
   isEditing?: boolean;
+  initialSubCategoryId?: string | number | null;
 }
 
 const CategorySection = ({
   categories = [],
   isEditing = false,
+  initialSubCategoryId = "",
 }: CategorySectionProps) => {
   const {
     control,
@@ -61,9 +63,20 @@ const CategorySection = ({
 
   const hasSubCategories = availableSubCategories.length > 0;
 
-  // Sirf aur sirf CREATE mode mein auto-clear chalega
+  // Did the listing originally have a subcategory assigned?
+  const hadInitialSubCategory = Boolean(
+    initialSubCategoryId && String(initialSubCategoryId).trim() !== "",
+  );
+
+  // Can the user edit the subcategory?
+  // - In CREATE mode: Yes, always (when subcategories exist).
+  // - In EDIT mode: Only if it had NO subcategory originally AND the category now has subcategories.
+  const canEditSubCategory =
+    !isEditing || (!hadInitialSubCategory && hasSubCategories);
+
+  // Auto-clear/sync effect
   useEffect(() => {
-    if (isEditing) return;
+    if (isEditing && !canEditSubCategory) return;
 
     if (selectedCategoryId) {
       if (!hasSubCategories) {
@@ -80,6 +93,7 @@ const CategorySection = ({
     }
   }, [
     isEditing,
+    canEditSubCategory,
     selectedCategoryId,
     hasSubCategories,
     availableSubCategories,
@@ -98,14 +112,15 @@ const CategorySection = ({
           </CardTitle>
           {isEditing && (
             <span className="flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              <Lock className="h-3 w-3" /> Locked
+              <Lock className="h-3 w-3" />{" "}
+              {canEditSubCategory ? "Category Locked" : "Locked"}
             </span>
           )}
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* 1. Main Category */}
+        {/* 1. Main Category (Always locked on edit) */}
         <div className="space-y-1.5">
           <Label htmlFor="categoryId" className="text-sm font-medium">
             Category <span className="text-destructive">*</span>
@@ -127,7 +142,9 @@ const CategorySection = ({
                   id="categoryId"
                   disabled={isEditing}
                   className={`bg-background ${
-                    isEditing ? "pointer-events-none cursor-not-allowed bg-muted/60 opacity-80" : ""
+                    isEditing
+                      ? "pointer-events-none cursor-not-allowed bg-muted/60 opacity-80"
+                      : ""
                   } ${
                     errors.categoryId
                       ? "border-destructive ring-1 ring-destructive"
@@ -153,11 +170,18 @@ const CategorySection = ({
           )}
         </div>
 
-        {/* 2. Sub-category */}
+        {/* 2. Sub-category (Conditionally unlocked if unassigned) */}
         <div className="space-y-1.5">
           <Label htmlFor="subCategoryId" className="text-sm font-medium">
             Sub-category{" "}
-            {hasSubCategories && <span className="text-destructive">*</span>}
+            {hasSubCategories && !isEditing && (
+              <span className="text-destructive">*</span>
+            )}
+            {isEditing && canEditSubCategory && (
+              <span className="text-xs font-normal text-muted-foreground">
+                (Optional)
+              </span>
+            )}
           </Label>
           <Controller
             control={control}
@@ -166,17 +190,23 @@ const CategorySection = ({
               <Select
                 value={field.value ? String(field.value) : ""}
                 onValueChange={(val) => {
-                  if (!isEditing) {
+                  if (canEditSubCategory) {
                     field.onChange(val);
                   }
                 }}
-                disabled={isEditing || !selectedCategoryId || !hasSubCategories}
+                disabled={
+                  !canEditSubCategory || !selectedCategoryId || !hasSubCategories
+                }
               >
                 <SelectTrigger
                   id="subCategoryId"
-                  disabled={isEditing || !selectedCategoryId || !hasSubCategories}
+                  disabled={
+                    !canEditSubCategory || !selectedCategoryId || !hasSubCategories
+                  }
                   className={`bg-background ${
-                    isEditing ? "pointer-events-none cursor-not-allowed bg-muted/60 opacity-80" : ""
+                    !canEditSubCategory
+                      ? "pointer-events-none cursor-not-allowed bg-muted/60 opacity-80"
+                      : ""
                   } ${
                     errors.subCategoryId && hasSubCategories
                       ? "border-destructive ring-1 ring-destructive"
@@ -204,7 +234,15 @@ const CategorySection = ({
             )}
           />
 
-          {isEditing && (
+          {/* Edit status hints */}
+          {isEditing && canEditSubCategory && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary">
+              <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              <span>New subcategories available. You can assign one now.</span>
+            </div>
+          )}
+
+          {isEditing && !canEditSubCategory && (
             <p className="text-[11px] text-muted-foreground">
               Dynamic schema integrity ke liye category change lock hai.
             </p>

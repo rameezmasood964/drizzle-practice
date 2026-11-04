@@ -175,6 +175,7 @@ const ListingFilters = ({
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="incomplete">⚠️ Incomplete Details</SelectItem>
             </SelectContent>
           </Select>
         </div>

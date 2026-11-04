@@ -25,7 +25,7 @@ export interface AreasTableProps {
 // Form Values Structure
 export interface AreaFormValues {
   name: string;
-  slug: string;
+  slug?: string;
   isActive: boolean;
 }
 

@@ -9,6 +9,7 @@ import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { MAX_FILE_SIZE, ALLOWED_IMAGE_TYPES } from "@/utils/constants";
 import { flattenError } from "zod";
 import { eq } from "drizzle-orm";
+import { createSlug } from "@/lib/utils";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,8 +18,7 @@ const supabase = createClient(
 
 // yeh rule book ha teacher neechy ha jo is rule book ky according cheezy dekhti ha
 const categorySchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  slug: z.string().trim().toLowerCase().min(1, "slug is required"),
+  name: z.string().trim().min(1, "Name is required"),
   parentId: z.string().nullable().optional(),
   icon: z.any().superRefine((file, ctx) => {
     if (!file || !(file instanceof File) || file.size === 0) {
@@ -65,13 +65,22 @@ export async function addcategory(prevState: any, formdata: FormData) {
       message: "Please fix the errors below.",
       inputs: {
         name: rawdata.name,
-        slug: rawdata.slug,
         parentId: rawdata.parentId,
       },
     };
   }
 
-  const { name, slug, parentId: parentIdStr, icon: validFile } = result.data;
+  const { name, parentId: parentIdStr, icon: validFile } = result.data;
+  const slug = createSlug(name);
+
+  if (!slug) {
+    return {
+      success: false,
+      errors: { name: ["Please enter a valid category name"] },
+      message: "Please enter a valid category name that can produce a URL slug.",
+      inputs: { name, parentId: parentIdStr },
+    };
+  }
 
   //   yah pr hmara jo parentid variable ha wo hmari jo vlue nikli ha result.data.parentid wali usy hmnny name dia parentidstr usy
   //   number mein convert krhy han mean parentID : "4"
@@ -80,6 +89,30 @@ export async function addcategory(prevState: any, formdata: FormData) {
     parentIdStr && parentIdStr !== "root" && parentIdStr !== "0"
       ? parseInt(parentIdStr)
       : null;
+
+  // Strict 2-level hierarchy depth validation guard (Add Category)
+  if (parentId !== null) {
+    const parentCategory = await db.query.categories.findFirst({
+      where: (c, { eq }) => eq(c.id, parentId),
+    });
+
+    if (!parentCategory) {
+      return {
+        success: false,
+        message: "Selected parent category does not exist.",
+        inputs: { name, parentId: parentIdStr },
+      };
+    }
+
+    if (parentCategory.parentId !== null) {
+      return {
+        success: false,
+        message:
+          "Sub-categories cannot have child categories. Maximum hierarchy depth is 2 levels.",
+        inputs: { name, parentId: parentIdStr },
+      };
+    }
+  }
   // yaha pr ulpoadicon variable bnya kion ky hmy image file name chye tha taky usy hm try catch mein handle kr sky
   let uploadedFileName: string | null = null;
 
@@ -138,7 +171,7 @@ export async function addcategory(prevState: any, formdata: FormData) {
         return {
           success: false,
           errors: { name: ["Category Name Already Available"] },
-          inputs: { name, slug, parentId: parentIdStr },
+          inputs: { name, parentId: parentIdStr },
         };
       }
 
@@ -198,16 +231,14 @@ export async function addcategory(prevState: any, formdata: FormData) {
     console.log("Extracted Error Detail:", errorDetail);
 
     if (errorCode === "23505") {
-      if (constraintName === "categories_slug_unique") {
+      if (constraintName === "categories_slug_unique" || constraintName.includes("slug")) {
         return {
           success: false,
           errors: {
-            slug: ["This slug already availble.kindly change your slug name"],
-            name: undefined,
-            icon: undefined,
-            parentId: undefined,
+            name: ["A category with this name/slug already exists."],
           },
-          inputs: { name, slug, parentId: parentIdStr },
+          message: "A category with a similar name or slug already exists. Please choose a different name.",
+          inputs: { name, parentId: parentIdStr },
         };
       }
 
@@ -216,11 +247,8 @@ export async function addcategory(prevState: any, formdata: FormData) {
           success: false,
           errors: {
             name: ["Category Name Already Available"],
-            slug: undefined,
-            icon: undefined,
-            parentId: undefined,
           },
-          inputs: { name, slug, parentId: parentIdStr },
+          inputs: { name, parentId: parentIdStr },
         };
       }
     }
@@ -230,7 +258,7 @@ export async function addcategory(prevState: any, formdata: FormData) {
     return {
       success: false,
       message: "Internal server error. Please try again later.",
-      inputs: { name, slug, parentId: parentIdStr },
+      inputs: { name, parentId: parentIdStr },
     };
   }
 }
@@ -245,8 +273,7 @@ export async function addcategory(prevState: any, formdata: FormData) {
 // Update Schema: Isme id lazmi chahiye hoti hai (kyunki database ko batana hai ke kis record ko change karna hai).
 const updateCategorySchema = z.object({
   id: z.string().min(1, "Category ID is required"),
-  name: z.string().min(1, "Name is required"),
-  slug: z.string().trim().toLowerCase().min(1, "Slug is required"),
+  name: z.string().trim().min(1, "Name is required"),
   parentId: z.string().nullable().optional(),
   icon: z.any().optional(),
 });
@@ -264,13 +291,12 @@ export async function updatecategory(prevState: any, formdata: FormData) {
       message: "Please fix the errors below.",
       inputs: {
         name: rawdata.name as string,
-        slug: rawdata.slug as string,
         parentId: rawdata.parentId as string,
-      }, // 👈 Yeh add karein
+      },
     };
   }
 
-  const { id, name, slug, parentId: parentIdStr, icon: newFile } = result.data;
+  const { id, name, parentId: parentIdStr, icon: newFile } = result.data;
 
   // yaha hm ny from sy aye hooye string id ko number mein convert kia
   const categoryId = parseInt(id);
@@ -279,6 +305,52 @@ export async function updatecategory(prevState: any, formdata: FormData) {
     parentIdStr && parentIdStr !== "root" && parentIdStr !== "0"
       ? parseInt(parentIdStr)
       : null;
+
+  // Strict 2-level hierarchy depth validation guard (Update Category)
+  if (parentId !== null) {
+    if (parentId === categoryId) {
+      return {
+        success: false,
+        message: "A category cannot be its own parent.",
+        inputs: { name, parentId: parentIdStr },
+      };
+    }
+
+    const parentCategory = await db.query.categories.findFirst({
+      where: (c, { eq }) => eq(c.id, parentId),
+    });
+
+    if (!parentCategory) {
+      return {
+        success: false,
+        message: "Selected parent category does not exist.",
+        inputs: { name, parentId: parentIdStr },
+      };
+    }
+
+    if (parentCategory.parentId !== null) {
+      return {
+        success: false,
+        message:
+          "Sub-categories cannot have child categories. Maximum hierarchy depth is 2 levels.",
+        inputs: { name, parentId: parentIdStr },
+      };
+    }
+
+    // Check if this category has existing child categories
+    const existingChildren = await db.query.categories.findFirst({
+      where: (c, { eq }) => eq(c.parentId, categoryId),
+    });
+
+    if (existingChildren) {
+      return {
+        success: false,
+        message:
+          "Sub-categories cannot have child categories. Maximum hierarchy depth is 2 levels.",
+        inputs: { name, parentId: parentIdStr },
+      };
+    }
+  }
 
   //     Agar admin ne naya file diya hai: Toh code us file ko Supabase Storage par
   //  upload karta hai, wahan se uska naya URL milta hai, aur hum us URL ko
@@ -340,7 +412,7 @@ export async function updatecategory(prevState: any, formdata: FormData) {
         return {
           success: false,
           message: error.message,
-          inputs: { name, slug, parentId: parentIdStr },
+          inputs: { name, parentId: parentIdStr },
         };
       }
 
@@ -353,16 +425,15 @@ export async function updatecategory(prevState: any, formdata: FormData) {
       iconUrl = data.publicUrl;
     }
 
-    // 3. Database update query
+    // 3. Database update query (slug is immutable to preserve SEO and existing links)
     await db
       .update(categories)
       .set({
         name,
-        slug,
         parentId,
         icon: iconUrl,
       })
-      .where(eq(categories.id, categoryId)); // Dhyan rahe yahan eq import hona chahiye dbal se ya eq operator use ho
+      .where(eq(categories.id, categoryId));
 
     revalidatePath("/admin/categories");
     return { success: true, message: "Category updated successfully!" };
@@ -381,22 +452,21 @@ export async function updatecategory(prevState: any, formdata: FormData) {
       pgError.constraint_name || error.constraint_name || "";
 
     if (errorCode === "23505") {
-      if (constraintName === "categories_slug_unique") {
+      if (constraintName === "categories_slug_unique" || constraintName.includes("slug")) {
         return {
           success: false,
           errors: {
-            slug: [
-              "This slug already available. Kindly change your slug name.",
-            ],
+            name: ["A category with this name/slug already exists."],
           },
-          inputs: { name, slug, parentId: parentIdStr }, // 👈 Yeh add karein
+          message: "A category with a similar name or slug already exists. Please choose a different name.",
+          inputs: { name, parentId: parentIdStr },
         };
       }
       if (constraintName === "categories_name_lower_unique") {
         return {
           success: false,
           errors: { name: ["Category Name Already Available"] },
-          inputs: { name, slug, parentId: parentIdStr }, // 👈 Yeh add karein
+          inputs: { name, parentId: parentIdStr },
         };
       }
     }

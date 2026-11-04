@@ -13,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { addcategory, updatecategory } from "../../actions/categories";
-import { formatCategoryTree } from "../../utils";
 
 interface CategoryFormProps {
   onSuccess?: () => void;
@@ -29,7 +28,11 @@ const CategoryForm = ({
   const isEditing = !!initialData;
   const actionToRun = isEditing ? updatecategory : addcategory;
 
-  const formattedCategories = formatCategoryTree(categories);
+  // Strict 2-level hierarchy: Only root categories (parentId === null) can be parents.
+  // When editing, also exclude the current category itself.
+  const rootCategories = (categories || []).filter(
+    (cat) => cat.parentId === null && (!isEditing || cat.id !== initialData?.id),
+  );
 
   const [state, formAction, isPending] = useActionState(
     actionToRun as any,
@@ -74,23 +77,6 @@ const CategoryForm = ({
         )}
       </div>
 
-      {/* Slug Field */}
-      <div className="space-y-2">
-        <Label htmlFor="slug">Slug</Label>
-        <Input
-          id="slug"
-          name="slug"
-          type="text"
-          placeholder="e.g. hostels"
-          defaultValue={formState?.inputs?.slug || initialData?.slug || ""}
-        />
-        {formState?.errors?.slug && (
-          <p className="text-xs text-destructive font-medium">
-            {formState.errors.slug[0]}
-          </p>
-        )}
-      </div>
-
       {/* Icon Field */}
       <div className="space-y-2">
         <Label htmlFor="icon">
@@ -126,13 +112,11 @@ const CategoryForm = ({
           <SelectContent>
             <SelectItem value="0">None (Root Category)</SelectItem>
 
-            {formattedCategories
-              .filter((cat) => !isEditing || cat.id !== initialData.id)
-              .map((cat) => (
-                <SelectItem key={cat.id} value={String(cat.id)}>
-                  {cat.name}
-                </SelectItem>
-              ))}
+            {rootCategories.map((cat) => (
+              <SelectItem key={cat.id} value={String(cat.id)}>
+                {cat.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         {formState?.errors?.parentId && (

@@ -13,6 +13,7 @@ const ListingsDashboardWrapper = ({
   listings = [],
   categories = [],
   areas = [], // 👈 areas receive karein
+  categoryFieldsMap = {},
   pagination,
 }: ExtendedWrapperProps) => {
   return (
@@ -21,7 +22,11 @@ const ListingsDashboardWrapper = ({
       <ListingStats {...stats} />
       <ListingFilters categories={categories} areas={areas} />{" "}
       {/* 👈 areas pass karein */}
-      <ListingsTable listings={listings} pagination={pagination} />
+      <ListingsTable
+        listings={listings}
+        pagination={pagination}
+        categoryFieldsMap={categoryFieldsMap}
+      />
     </div>
   );
 };
