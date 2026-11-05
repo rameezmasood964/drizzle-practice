@@ -1,5 +1,4 @@
-
-import {pgTable,uuid,text,timestamp,pgEnum} from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 
 export const userRole = pgEnum('user_role', ['user', 'admin']);
 
@@ -10,3 +9,7 @@ export const profiles = pgTable('profiles', {
   role: userRole('role').default('user').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const users = profiles;
+export type Profile = typeof profiles.$inferSelect;
+export type User = typeof profiles.$inferSelect;

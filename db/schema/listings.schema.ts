@@ -9,12 +9,15 @@ import {
   jsonb,
   uuid,
   doublePrecision,
+  numeric,
   index,
 } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 
 import { profiles } from "./user.schema";
 import { categories } from "./categories.schema";
 import { areas } from "./areas.schema";
+import { claims } from "./claims.schema";
 
 export const listingStatus = pgEnum("listing_status", [
   "draft",
@@ -75,6 +78,11 @@ export const listings = pgTable(
     status: listingStatus("status").default("draft").notNull(),
     isVerified: boolean("is_verified").default(false).notNull(),
     isFeatured: boolean("is_featured").default(false).notNull(),
+    isClaimed: boolean("is_claimed").default(false).notNull(),
+    averageRating: numeric("average_rating", { precision: 3, scale: 2 })
+      .default("0.00")
+      .notNull(),
+    reviewCount: integer("review_count").default(0).notNull(),
     adminNotes: text("admin_notes"),
 
     expiresAt: timestamp("expires_at", { withTimezone: true }),
@@ -111,3 +119,24 @@ export const listingImages = pgTable(
 
 export type Listing = typeof listings.$inferSelect;
 export type NewListing = typeof listings.$inferInsert;
+
+export const listingsRelations = relations(listings, ({ one, many }) => ({
+  owner: one(profiles, {
+    fields: [listings.ownerId],
+    references: [profiles.id],
+  }),
+  createdByAdmin: one(profiles, {
+    fields: [listings.createdByAdminId],
+    references: [profiles.id],
+  }),
+  category: one(categories, {
+    fields: [listings.categoryId],
+    references: [categories.id],
+  }),
+  area: one(areas, {
+    fields: [listings.areaId],
+    references: [areas.id],
+  }),
+  images: many(listingImages),
+  claims: many(claims),
+}));

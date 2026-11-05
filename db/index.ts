@@ -1,17 +1,34 @@
-
-import {drizzle} from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema";
 
-const connectionString = process.env.DATABASE_URL;
+const rawConnectionString = process.env.DATABASE_URL?.trim();
 
-if (!connectionString)  {
-  throw new Error ("DATABASE_URL is missing in .env file. Please check your environment variables.");
+if (!rawConnectionString) {
+  throw new Error(
+    "DATABASE_URL is missing in .env file. Please check your environment variables.",
+  );
 }
 
-// 2. Postgres ka client banana jo database ke sath physical connection open karega
-const Client = postgres (connectionString);
+// Remove surrounding quotes if present
+const connectionString = rawConnectionString.replace(/^["']|["']$/g, "");
 
-// 3. Drizzle ko initialize karna aur schema sath attach kar dena taake poora project use kar sakay
-export const db = drizzle(Client, { schema });
+// Global cache to prevent connection exhaustion during Next.js hot reloads
+declare global {
+  // eslint-disable-next-line no-var
+  var _postgresClient: postgres.Sql | undefined;
+}
 
+const client =
+  globalThis._postgresClient ??
+  postgres(connectionString, {
+    max: 10,
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalThis._postgresClient = client;
+}
+
+export const db = drizzle(client, { schema });

@@ -1,14 +1,14 @@
-import AdminSideBar from "@/components/layout/AdminSideBar"
+import AdminSideBar from "@/components/layout/Admin/AdminSideBar"
 import { Toaster } from "@/components/ui/sonner"
-export default function AdminLayout ({children}:{children:React.ReactNode}){
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
 
-    return(
+    return (
 
         <div className="flex flex-row">
-            <AdminSideBar/>
+            <AdminSideBar />
             <main>{children}</main>
-            <Toaster/>
-            
+            <Toaster />
+
         </div>
     )
 

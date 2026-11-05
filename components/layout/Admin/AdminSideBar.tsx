@@ -22,7 +22,7 @@ const AdminSideBar = () => {
           Categories
         </Link>
 
-         <Link
+        <Link
           className="block px-4 py-2 rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           href="/admin/areas"
         >
@@ -33,6 +33,18 @@ const AdminSideBar = () => {
           href="/admin/listings"
         >
           Listings
+        </Link>
+        <Link
+          className="block px-4 py-2 rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          href="/admin/reviews"
+        >
+          Reviews & Comments
+        </Link>
+        <Link
+          className="block px-4 py-2 rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          href="/admin/claims"
+        >
+          Business Claim
         </Link>
       </nav>
     </aside>
