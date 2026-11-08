@@ -1,0 +1,93 @@
+# ===================================================================
+# ApnaBWP Hostel Listings — CSV Import Template
+# Version: 1.0 | Generated from live database
+# ===================================================================
+#
+# HOW TO USE:
+#   1. Remove all comment lines (starting with #) before importing.
+#   2. Semicolons (;) separate multiple values in multiselect fields.
+#   3. Commas (,) separate multiple image URLs.
+#   4. Leave optional fields blank — do NOT write null, N/A, or 0.
+#   5. area_name must match a name below exactly (case-insensitive).
+#   6. category_name + sub_category_name must match names below exactly.
+#   7. Conditional fields: only fill when the controlling condition is met.
+#
+# ===================================================================
+# ACTIVE AREAS (copy exact name into area_name column)
+# ===================================================================
+#   chase value
+#   circular road
+#   Commercial Area Satellite Town
+#   dubai chowk
+#   faisal colony
+#   model town A
+#   model town B
+#   model town C
+#   One Unit Chowk
+#   other
+#   university chowk
+#
+# ===================================================================
+# CATEGORIES
+# ===================================================================
+#   category_name    : Hostels
+#   sub_category_name: Boys Hostels  OR  Girls Hostels
+#
+# ===================================================================
+# FIELD REFERENCE — Exact option values from database
+# ===================================================================
+#
+# COLUMN                        TYPE          REQUIRED   OPTIONS / NOTES
+# ──────────────────────────────────────────────────────────────────────────────
+# title                         text          YES        Business name (3-120 chars)
+# phone                         text          YES        e.g. 03001234567
+# whatsapp                      text          YES        e.g. 03001234567
+# email                         text          no         Valid email or blank
+# website                       text          no         Full URL or blank
+# address                       text          YES        Min 5 chars
+# landmark                      text          no
+# maps_url                      text          YES        Full Google Maps URL
+# area_name                     text          YES        See ACTIVE AREAS above
+# state                         text          no         Default: Punjab
+# postal_code                   text          no         Default: 63100
+# category_name                 text          YES        "Hostels"
+# sub_category_name             text          YES        "Boys Hostels" or "Girls Hostels"
+# status                        select        no         approved|pending|draft|rejected (default: approved)
+# is_featured                   boolean       no         true|false (default: false)
+# image_urls                    text          YES        Comma-separated HTTPS image URLs (1-8)
+#
+# DYNAMIC FIELDS — Hostels (parent category, inherited by all)
+# monthly_rent                  number        YES
+# room_type                     multiselect   YES        Single Seater;2 Seater;3 Seater;4 Seater;5+ Seater
+# room_facilities               multiselect   YES        Bed;Mattress;Study Table;Chair;Wardrobe
+# security_deposit_required     select        YES        Yes | NO
+# security_deposit_amount       number        IF-VISIBLE [Show only when security_deposit_required = Yes]
+# security_deposit_fee          number        IF-VISIBLE [Show only when security_deposit_required = Yes]
+# mess_available                select        YES        Yes | NO
+# mess_charges_rs               number        IF-VISIBLE [Show only when mess_available = Yes]
+# cooling_facilities            multiselect   YES        AC Cooler;DC Cooler;Ac
+# ac_arrangement                select        IF-VISIBLE [When cooling_facilities = Ac]:  Hostel Provides;Student Arranges;Both Options Available
+# dc_cooler_arrangement         select        IF-VISIBLE [When cooling_facilities = DC Cooler]: Hostel Provides;Student Arranges;Both Options Available
+# ac_cooler_arrangement         select        IF-VISIBLE [When cooling_facilities = AC Cooler]: Hostel Provides;Student Arranges;Both Options Available
+# cooling_charges__details      textarea      IF-VISIBLE [When cooling_facilities = AC Cooler]
+# hot_water_facility            select        YES        Available | Not Available
+# wifi                          select        YES        Yes | NO
+# electricity_backup            multiselect   YES        UPS;Generator;Solar
+# washroom_type                 multiselect   YES        Attached;Shared
+# cleaning_arrangement          select        YES        Student Cleans Own Room | Housekeeping Cleans Room | Student Cleans Room & Housekeeping Cleans Common Areas | Housekeeping Cleans Entire Hostel
+# kitchen_available             select        YES        Yes | NO
+# drinking_water_facility       select        YES        Yes | NO
+# cctv_surveillance             select        YES        Yes | NO
+# security_guard                select        YES        Yes | NO
+# parking_facility              select        YES        Bike Parking | Car Parking | Both | No Parking
+# refrigerator_available        select        YES        Yes | NO
+# entry_exit_policy             select        YES        No Time Restriction | Fixed Entry & Exit Timing
+# entry_exit_timing             textarea      IF-VISIBLE [When entry_exit_policy = Fixed Entry & Exit Timing]
+# female_warden                 select        YES*       Yes | NO  (* Girls Hostel only)
+#
+# NOTE: Old/test fields (mess, wifi-text, security_guard-text etc.) are ignored by importer.
+# ===================================================================
+#
+title,phone,whatsapp,email,website,address,landmark,maps_url,area_name,state,postal_code,category_name,sub_category_name,status,is_featured,image_urls,monthly_rent,room_type,room_facilities,security_deposit_required,security_deposit_amount,security_deposit_fee,mess_available,mess_charges_rs,cooling_facilities,ac_arrangement,dc_cooler_arrangement,ac_cooler_arrangement,cooling_charges__details,hot_water_facility,wifi,electricity_backup,washroom_type,cleaning_arrangement,kitchen_available,drinking_water_facility,cctv_surveillance,security_guard,parking_facility,refrigerator_available,entry_exit_policy,entry_exit_timing,female_warden
+Al-Farooq Boys Hostel,03001234567,03001234567,alfarooq@example.com,,Street 5 Near Islamia University,Near Main Gate,https://maps.google.com/?q=29.3956+71.6836,university chowk,Punjab,63100,Hostels,Boys Hostels,approved,false,https://example.com/img1.jpg,5000,2 Seater;3 Seater,Bed;Study Table;Wardrobe,Yes,2000,2000,Yes,1500,DC Cooler,,Hostel Provides,,,Available,Yes,Generator;UPS,Shared,Housekeeping Cleans Room,NO,Yes,Yes,Yes,No Parking,Yes,No Time Restriction,,
+Al-Noor Girls Hostel,03111234567,03111234567,,,Street 12 Model Town B,Near City Park,https://maps.google.com/?q=29.3912+71.6801,model town B,Punjab,63100,Hostels,Girls Hostels,approved,false,https://example.com/img2.jpg,6000,Single Seater;2 Seater,Bed;Mattress;Study Table;Chair,NO,,,Yes,2000,AC Cooler,,,Hostel Provides,AC Cooler charges Rs.200/month,Available,Yes,Generator,Attached;Shared,Housekeeping Cleans Entire Hostel,Yes,Yes,Yes,Yes,No Parking,Yes,Fixed Entry & Exit Timing,"Entry 8am-10pm, Exit before 9pm",Yes
