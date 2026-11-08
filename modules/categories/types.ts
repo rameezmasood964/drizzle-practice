@@ -61,6 +61,10 @@ export interface CategoryFieldItem {
   sortOrder: number;
   isFilterable: boolean;
   isActive: boolean;
+  dependsOnFieldKey?: string | null;
+  conditionOperator?: "equals" | "not_equals" | "is_not_empty" | "contains" | string | null;
+  conditionValue?: string | null;
+  requiredIfVisible?: boolean;
 }
 
 // CategoryFields UI component ke props

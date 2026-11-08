@@ -12,6 +12,7 @@ import type { ListingFormValues } from "../schema";
 import { eq, or, like, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { createSlug } from "@/lib/utils";
+import { isFieldRequired, purgeHiddenFieldValues } from "@/modules/categories/utils";
 
 // 🛠️ Helper function jo unique slug guarantee karta hai
 async function generateUniqueSlug(rawInput: string): Promise<string> {
@@ -126,12 +127,15 @@ export async function createListingAction(formData: ListingFormValues) {
     }
 
     const deduplicatedFields = Array.from(fieldsMap.values());
-    const customFieldsData = (data.customFields || {}) as Record<string, any>;
+    const rawCustomFieldsData = (data.customFields || {}) as Record<string, any>;
+    // Purge hidden fields so they are never saved or validated on the server
+    const customFieldsData = purgeHiddenFieldValues(deduplicatedFields, rawCustomFieldsData);
 
     for (const field of deduplicatedFields) {
       if (field.type === "boolean") continue;
 
-      if (field.isRequired) {
+      const required = isFieldRequired(field, customFieldsData);
+      if (required) {
         const val = customFieldsData[field.key];
         const isEmpty =
           val === undefined ||
@@ -215,7 +219,11 @@ export async function createListingAction(formData: ListingFormValues) {
       );
     }
 
-    revalidatePath("/admin/listings");
+    try {
+      revalidatePath("/admin/listings");
+    } catch {
+      // safe fallback outside Next.js request context
+    }
 
     return {
       success: true,

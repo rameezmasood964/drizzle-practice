@@ -62,6 +62,11 @@ export const categoryFields = pgTable(
     sortOrder: integer("sort_order").default(0).notNull(),
     isFilterable: boolean("is_filterable").default(false).notNull(),
     isActive: boolean("is_active").default(true).notNull(),
+    // Conditional Visibility & Requirements
+    dependsOnFieldKey: text("depends_on_field_key"),
+    conditionOperator: text("condition_operator").default("equals"),
+    conditionValue: text("condition_value"),
+    requiredIfVisible: boolean("required_if_visible").default(false).notNull(),
   },
   (t) => [
     unique("category_fields_category_key_unique").on(t.categoryId, t.key),

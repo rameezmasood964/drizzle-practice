@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Eye, HelpCircle } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -17,19 +18,22 @@ import {
   createCategoriesField,
   updateCategoryFields,
 } from "../../actions/fields";
+import { CategoryFieldItem } from "../../types";
+import { canFieldDependOn } from "../../utils";
 
 interface AddCategoryFieldFormProps {
   categoryId: string | number;
   onSuccess: () => void;
   initialData?: any;
+  allFields?: CategoryFieldItem[];
 }
 
 const AddCategoryFieldForm = ({
   categoryId,
   onSuccess,
   initialData,
+  allFields = [],
 }: AddCategoryFieldFormProps) => {
-  // all states
   // all states (pre-filled with initialData if editing)
   const [fieldType, setFieldType] = useState(initialData?.type || "text");
   const [label, setLabel] = useState(initialData?.label || "");
@@ -42,11 +46,29 @@ const AddCategoryFieldForm = ({
   );
   const [helpText, setHelpText] = useState(initialData?.helpText || "");
   const [isRequired, setIsRequired] = useState(
-    Boolean(initialData?.isRequired),
+    Boolean(initialData?.dependsOnFieldKey ? false : initialData?.isRequired),
   );
   const [isFilterable, setIsFilterable] = useState(
     Boolean(initialData?.isFilterable),
   );
+
+  // Conditional Visibility States
+  const [isConditional, setIsConditional] = useState(
+    Boolean(initialData?.dependsOnFieldKey),
+  );
+  const [dependsOnFieldKey, setDependsOnFieldKey] = useState(
+    initialData?.dependsOnFieldKey || "",
+  );
+  const [conditionOperator, setConditionOperator] = useState(
+    initialData?.conditionOperator || "equals",
+  );
+  const [conditionValue, setConditionValue] = useState(
+    initialData?.conditionValue || "",
+  );
+  const [requiredIfVisible, setRequiredIfVisible] = useState(
+    Boolean(initialData?.requiredIfVisible),
+  );
+
   const [optionsError, setOptionsError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -60,15 +82,57 @@ const AddCategoryFieldForm = ({
       .replace(/[^a-z0-9_]/g, ""); // special symbols jaise '(', ')', '.', '@' ko hata de
   };
 
-  // handle submitfunction
+  // 1. Compatible controlling fields (no self-dependency, no cycles)
+  const availableControllingFields = useMemo(() => {
+    if (!allFields || allFields.length === 0) return [];
+    const currentKey = (key || initialData?.key || "").trim().toLowerCase();
+    const currentId = initialData?.id;
 
+    return allFields.filter((f) => {
+      if (f.isActive === false) return false;
+      if (currentId && f.id === currentId) return false;
+      if (f.key.trim().toLowerCase() === currentKey) return false;
+      // Prevent circular dependency
+      return canFieldDependOn(currentKey, f.key, allFields);
+    });
+  }, [allFields, key, initialData]);
+
+  // 2. Selected controlling field
+  const selectedControllingField = useMemo(() => {
+    return availableControllingFields.find((f) => f.key === dependsOnFieldKey);
+  }, [availableControllingFields, dependsOnFieldKey]);
+
+  // 3. Predefined options for value selection if controlling field is select/multiselect/boolean
+  const conditionValueOptions = useMemo(() => {
+    if (!selectedControllingField) return [];
+    if (selectedControllingField.type === "boolean") {
+      return ["Yes", "No"];
+    }
+    if (
+      selectedControllingField.type === "select" ||
+      selectedControllingField.type === "multiselect"
+    ) {
+      if (Array.isArray(selectedControllingField.options)) {
+        return selectedControllingField.options;
+      }
+      if (typeof selectedControllingField.options === "string") {
+        return (selectedControllingField.options as string)
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+    }
+    return [];
+  }, [selectedControllingField]);
+
+  // handle submitfunction
   const handleSubmit = async () => {
     const isOptionField = fieldType === "select" || fieldType === "multiselect";
     const optionsArray = isOptionField
       ? options
-          .split(",")
-          .map((item: any) => item.trim())
-          .filter(Boolean)
+        .split(",")
+        .map((item: any) => item.trim())
+        .filter(Boolean)
       : null;
 
     if (isOptionField && (!optionsArray || optionsArray.length === 0)) {
@@ -78,10 +142,33 @@ const AddCategoryFieldForm = ({
     }
     setOptionsError("");
 
+    if (isConditional) {
+      if (!dependsOnFieldKey || dependsOnFieldKey.trim() === "") {
+        toast.error("Controlling field select karein (Show If).");
+        return;
+      }
+      if (
+        conditionOperator !== "is_not_empty" &&
+        (!conditionValue || conditionValue.trim() === "")
+      ) {
+        toast.error("Condition value enter/select karein.");
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
-
       let response;
+
+      const conditionalPayload = {
+        dependsOnFieldKey: isConditional ? dependsOnFieldKey : null,
+        conditionOperator: isConditional ? conditionOperator : null,
+        conditionValue:
+          isConditional && conditionOperator !== "is_not_empty"
+            ? conditionValue.trim()
+            : null,
+        requiredIfVisible: isConditional ? requiredIfVisible : false,
+      };
 
       if (isEditMode) {
         // --- 1. EDIT MODE: Sirf editable fields ka payload ---
@@ -90,8 +177,9 @@ const AddCategoryFieldForm = ({
           options: optionsArray,
           placeholder: placeholder.trim() || null,
           helpText: helpText.trim() || null,
-          isRequired,
+          isRequired: isConditional ? false : isRequired,
           isFilterable,
+          ...conditionalPayload,
         };
 
         response = await updateCategoryFields(
@@ -108,25 +196,25 @@ const AddCategoryFieldForm = ({
           options: optionsArray,
           placeholder: placeholder.trim() || null,
           helpText: helpText.trim() || null,
-          isRequired,
+          isRequired: isConditional ? false : isRequired,
           isFilterable,
+          ...conditionalPayload,
         };
 
         response = await createCategoriesField(createPayload);
       }
 
-      // 👇 Yeh console lagayein:
       console.log("category field ka server action pr response", response);
       if (response.success) {
         toast.success(
           response.message ||
-            (isEditMode
-              ? "Field updated successfully!"
-              : "Custom field added successfully!"),
+          (isEditMode
+            ? "Field updated successfully!"
+            : "Custom field added successfully!"),
         );
         onSuccess();
       } else {
-        toast.error(response.error || "Failed to add field");
+        toast.error(response.error || "Failed to save field");
       }
     } catch (error) {
       console.error("Submit error:", error);
@@ -253,20 +341,183 @@ const AddCategoryFieldForm = ({
           </p>
         </div>
 
-        {/* Toggles */}
-        <div className="pt-2 border-t space-y-3">
+        {/* Conditional Visibility Section */}
+        <div className="pt-3 border-t space-y-3">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label className="text-sm font-medium">Required Field</Label>
+              <div className="flex items-center gap-1.5">
+                <Eye className="h-4 w-4 text-primary" />
+                <Label className="text-sm font-semibold">Enable Conditional Visibility</Label>
+              </div>
               <p className="text-[11px] text-muted-foreground">
-                Listing cannot be published without this field.
+                Show or hide this field based on another field&apos;s answer.
               </p>
             </div>
             <Switch
-              checked={isRequired}
-              onCheckedChange={(checked) => setIsRequired(checked)}
+              checked={isConditional}
+              onCheckedChange={(checked) => {
+                setIsConditional(checked);
+                if (checked) {
+                  // When Conditional Visibility is enabled, automatically set isRequired = false
+                  setIsRequired(false);
+                } else {
+                  setDependsOnFieldKey("");
+                  setConditionValue("");
+                  setRequiredIfVisible(false);
+                }
+              }}
             />
           </div>
+
+          {isConditional && (
+            <div className="rounded-lg border border-border bg-muted/30 p-3.5 space-y-3.5">
+              {availableControllingFields.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  No other active fields available in this category or parent category to depend on.
+                </p>
+              ) : (
+                <>
+                  {/* 1. Show If (Controlling Field) */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium flex items-center justify-between">
+                      <span>Show If (Controlling Field) <span className="text-destructive">*</span></span>
+                      {selectedControllingField && (
+                        <span className="text-[10px] text-muted-foreground uppercase font-mono">
+                          {selectedControllingField.type}
+                        </span>
+                      )}
+                    </Label>
+                    <Select
+                      value={dependsOnFieldKey}
+                      onValueChange={(val) => {
+                        setDependsOnFieldKey(val);
+                        // Reset condition value when changing controlling field
+                        const target = availableControllingFields.find((f) => f.key === val);
+                        if (target?.type === "boolean") {
+                          setConditionValue("Yes");
+                        } else if (target?.options && Array.isArray(target.options) && target.options.length > 0) {
+                          setConditionValue(target.options[0]);
+                        } else {
+                          setConditionValue("");
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full bg-background text-xs">
+                        <SelectValue placeholder="Select controlling field" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableControllingFields.map((f) => (
+                          <SelectItem key={f.key} value={f.key} className="text-xs">
+                            {f.label} ({f.key})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* 2. Condition & 3. Value */}
+                  <div
+                    className={`grid grid-cols-1 ${conditionOperator === "is_not_empty" ? "" : "sm:grid-cols-2"
+                      } gap-3`}
+                  >
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Condition</Label>
+                      <Select
+                        value={conditionOperator}
+                        onValueChange={setConditionOperator}
+                      >
+                        <SelectTrigger className="w-full bg-background text-xs">
+                          <SelectValue placeholder="Condition" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="equals" className="text-xs">
+                            Equals (=)
+                          </SelectItem>
+                          <SelectItem value="not_equals" className="text-xs">
+                            Not Equals (≠)
+                          </SelectItem>
+                          <SelectItem value="contains" className="text-xs">
+                            Contains (Multi-Select)
+                          </SelectItem>
+                          <SelectItem value="is_not_empty" className="text-xs">
+                            Is Not Empty (Any Selection)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {conditionOperator !== "is_not_empty" && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium">
+                          Value <span className="text-destructive">*</span>
+                        </Label>
+                        {conditionValueOptions.length > 0 ? (
+                          <Select
+                            value={conditionValue}
+                            onValueChange={setConditionValue}
+                          >
+                            <SelectTrigger className="w-full bg-background text-xs">
+                              <SelectValue placeholder="Select value" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {conditionValueOptions.map((opt) => (
+                                <SelectItem
+                                  key={opt}
+                                  value={opt}
+                                  className="text-xs"
+                                >
+                                  {opt}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            placeholder="e.g. Yes"
+                            className="bg-background text-xs h-9"
+                            value={conditionValue}
+                            onChange={(e) => setConditionValue(e.target.value)}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 4. Required If Visible */}
+                  <div className="pt-2 border-t border-border/60 flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-xs font-medium">Required If Visible</Label>
+                      <p className="text-[10px] text-muted-foreground">
+                        Make this field mandatory only when it becomes visible.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={requiredIfVisible}
+                      onCheckedChange={setRequiredIfVisible}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Toggles */}
+        <div className="pt-2 border-t space-y-3">
+          {!isConditional && (
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Required Field</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Listing cannot be published without this field.
+                </p>
+              </div>
+              <Switch
+                checked={isRequired}
+                onCheckedChange={(checked) => setIsRequired(checked)}
+              />
+            </div>
+          )}
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">

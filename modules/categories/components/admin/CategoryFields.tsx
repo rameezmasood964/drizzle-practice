@@ -145,6 +145,7 @@ export default function CategoryFields({
               key={fieldToEdit ? fieldToEdit.id : "new"}
               categoryId={categoryId}
               initialData={fieldToEdit}
+              allFields={fields}
               onSuccess={() => {
                 setIsAddOpen(false);
                 setFieldToEdit(null);
@@ -193,7 +194,25 @@ export default function CategoryFields({
                       className="hover:bg-muted/50 transition-colors"
                     >
                       <TableCell className="p-4 font-medium text-foreground">
-                        {f.label}
+                        <div>
+                          <div>{f.label}</div>
+                          {f.dependsOnFieldKey && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="inline-flex items-center rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                {f.conditionOperator === "is_not_empty"
+                                  ? `Show if ${f.dependsOnFieldKey} is not empty`
+                                  : f.conditionOperator === "contains"
+                                  ? `Show if ${f.dependsOnFieldKey} contains "${f.conditionValue}"`
+                                  : `Show if ${f.dependsOnFieldKey} ${f.conditionOperator === "not_equals" ? "≠" : "="} "${f.conditionValue}"`}
+                              </span>
+                              {f.requiredIfVisible && (
+                                <span className="inline-flex items-center rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                                  Required when visible
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
 
                       <TableCell className="p-4">
@@ -209,7 +228,19 @@ export default function CategoryFields({
                       </TableCell>
 
                       <TableCell className="p-4">
-                        {f.isRequired ? (
+                        {f.dependsOnFieldKey ? (
+                          f.requiredIfVisible ? (
+                            <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              If Visible
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <XCircle className="h-3.5 w-3.5 opacity-50" />
+                              No
+                            </span>
+                          )
+                        ) : f.isRequired ? (
                           <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             Yes

@@ -1,9 +1,7 @@
 import ListingsDashboardWrapper from "@/modules/listings/components/admin/ListingsDashboardWrapper";
 import { getAdminListings, getListingStats } from "@/modules/listings/queries";
-import { getAllCategoryFieldsMap } from "@/modules/categories/queries";
-import { db } from "@/db";
-import { categories, areas } from "@/db/schema"; // 👈 areas import karein
-import { isNull, asc } from "drizzle-orm";
+import { getAllCategoryFieldsMap, getRootCategories } from "@/modules/categories/queries";
+import { getAreasDropdown } from "@/modules/areas/queries";
 
 interface PageProps {
   searchParams: Promise<{
@@ -22,26 +20,20 @@ const ListingsPage = async ({ searchParams }: PageProps) => {
   const limit = 10;
   const offset = (page - 1) * limit;
 
-  // 1. Parallel data fetching
+  // 1. Parallel data fetching with resilient error boundaries
   const [listingsResult, stats, categoriesList, areasList, categoryFieldsMap] =
     await Promise.all([
       getAdminListings({
         search: params.search,
         status: params.status,
         categoryId: params.categoryId ? Number(params.categoryId) : undefined,
-        areaId: params.areaId ? Number(params.areaId) : undefined, // 👈 query ko areaId pass karein
+        areaId: params.areaId ? Number(params.areaId) : undefined,
         limit,
         offset,
       }),
       getListingStats(),
-      db
-        .select({ id: categories.id, name: categories.name })
-        .from(categories)
-        .where(isNull(categories.parentId)),
-      db
-        .select({ id: areas.id, name: areas.name })
-        .from(areas)
-        .orderBy(asc(areas.name)), // 👈 Areas fetch query
+      getRootCategories(),
+      getAreasDropdown(),
       getAllCategoryFieldsMap(),
     ]);
 

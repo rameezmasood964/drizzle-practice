@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ListingFormValues } from "@/modules/listings/types";
+import { isFieldVisible, isFieldRequired } from "@/modules/categories/utils";
 
 function parseOptions(rawOptions: unknown): string[] {
   if (Array.isArray(rawOptions)) {
@@ -60,6 +61,7 @@ const CustomFieldsSection = ({
 
   const categoryId = watch("categoryId");
   const subCategoryId = watch("subCategoryId");
+  const customFieldsValues = (watch("customFields") || {}) as Record<string, any>;
 
   // Inheritance Logic: Subcategory fields + Parent category fields
   const fields = useMemo(() => {
@@ -82,10 +84,13 @@ const CustomFieldsSection = ({
     return [...childFields, ...inheritedParentFields];
   }, [categoryId, subCategoryId, categoryFieldsMap]);
 
-  // Clear any existing errors for fields that are optional for this legacy listing on mount
+  // Clear any existing errors for hidden conditional fields or optional legacy fields
   useEffect(() => {
-    if (isEditMode && fields.length > 0) {
-      fields.forEach((field) => {
+    fields.forEach((field) => {
+      const isVis = isFieldVisible(field, customFieldsValues);
+      if (!isVis) {
+        clearErrors(`customFields.${field.key}` as any);
+      } else if (isEditMode) {
         const wasPresent =
           field.key in initialDetails &&
           initialDetails[field.key] !== undefined &&
@@ -100,9 +105,9 @@ const CustomFieldsSection = ({
         if (!wasPresent) {
           clearErrors(`customFields.${field.key}` as any);
         }
-      });
-    }
-  }, [isEditMode, fields, initialDetails, clearErrors]);
+      }
+    });
+  }, [isEditMode, fields, initialDetails, customFieldsValues, clearErrors]);
 
   return (
     <Card className="border-border bg-card shadow-sm">
@@ -132,6 +137,11 @@ const CustomFieldsSection = ({
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {fields.map((field) => {
+              const isVisible = isFieldVisible(field, customFieldsValues);
+              if (!isVisible) {
+                return null;
+              }
+
               const fieldName = `customFields.${field.key}` as const;
               const fieldError = (errors?.customFields as Record<string, any>)?.[
                 field.key
@@ -155,11 +165,17 @@ const CustomFieldsSection = ({
                   ? initialDetails[field.key].length > 0
                   : true);
 
-              const isLegacyMissing =
-                isEditMode && field.isRequired && !wasPresentInOriginal;
+              const isEffectiveRequired = isFieldRequired(
+                field,
+                customFieldsValues,
+                isEditMode,
+                initialDetails,
+              );
 
-              const isEffectiveRequired =
-                field.isRequired && (!isEditMode || wasPresentInOriginal);
+              const isLegacyMissing =
+                isEditMode &&
+                Boolean(field.isRequired || (field.dependsOnFieldKey && field.requiredIfVisible)) &&
+                !wasPresentInOriginal;
 
               // 1. Text Field
               if (field.type === "text") {
@@ -238,10 +254,14 @@ const CustomFieldsSection = ({
                           : ""
                       }`}
                       {...register(fieldName, {
-                        valueAsNumber: true,
-                        required: isEffectiveRequired
-                          ? `${displayName} bharna lazmi hai.`
-                          : false,
+                        setValueAs: (v) =>
+                          v === "" || v === null || isNaN(Number(v))
+                            ? undefined
+                            : Number(v),
+                        validate: (v) =>
+                          !isEffectiveRequired ||
+                          (v !== undefined && !isNaN(Number(v))) ||
+                          `${displayName} bharna lazmi hai.`,
                         onChange: () => {
                           if (fieldError) clearErrors(fieldName as any);
                         },

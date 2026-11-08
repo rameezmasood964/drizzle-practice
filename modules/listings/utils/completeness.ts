@@ -1,5 +1,7 @@
 // modules/listings/utils/completeness.ts
 
+import { isFieldRequired } from "@/modules/categories/utils";
+
 export interface MissingFieldInfo {
   key: string;
   label: string;
@@ -64,7 +66,7 @@ export function checkListingCompleteness(
   for (const field of relevantFields) {
     if (field.type === "boolean") continue;
 
-    if (field.isRequired) {
+    if (isFieldRequired(field, details)) {
       const val = details[field.key];
       const isEmpty =
         val === undefined ||

@@ -8,6 +8,7 @@ import { listings, listingImages, categories, categoryFields } from "@/db/schema
 import { listingFormSchema } from "../schema";
 import type { ListingFormValues } from "../types";
 import { createSlug } from "@/lib/utils";
+import { isFieldRequired, purgeHiddenFieldValues } from "@/modules/categories/utils";
 
 // Update ke waqt collision check (apni current listing ko chhor kar check karega)
 async function generateUniqueSlugForUpdate(
@@ -141,13 +142,29 @@ export async function updateListingAction(
       string,
       any
     >;
-    const customFieldsData = (data.customFields || {}) as Record<string, any>;
+    const rawCustomFieldsData = (data.customFields || {}) as Record<string, any>;
+
+    // Merge existing details with updated custom fields
+    const candidateDetails = {
+      ...existingDetails,
+      ...rawCustomFieldsData,
+    };
+
+    // Purge hidden fields so stale values from previous answers are removed
+    const mergedDetails = purgeHiddenFieldValues(dbCategoryFields, candidateDetails);
 
     for (const field of dbCategoryFields) {
       if (field.type === "boolean") continue;
 
-      if (field.isRequired) {
-        const val = customFieldsData[field.key];
+      const isRequired = isFieldRequired(
+        field,
+        mergedDetails,
+        true,
+        existingDetails,
+      );
+
+      if (isRequired) {
+        const val = mergedDetails[field.key];
         const isEmpty =
           val === undefined ||
           val === null ||
@@ -156,24 +173,6 @@ export async function updateListingAction(
           (field.type === "number" && isNaN(Number(val)));
 
         if (isEmpty) {
-          // Graceful handling for older listings:
-          // If this field was NOT present in the original listing's details JSONB
-          // (i.e. it is a newly introduced required category field), allow the update without error.
-          const wasPresentInOriginal =
-            field.key in existingDetails &&
-            existingDetails[field.key] !== undefined &&
-            existingDetails[field.key] !== null &&
-            (typeof existingDetails[field.key] === "string"
-              ? existingDetails[field.key].trim() !== ""
-              : true) &&
-            (Array.isArray(existingDetails[field.key])
-              ? existingDetails[field.key].length > 0
-              : true);
-
-          if (!wasPresentInOriginal) {
-            continue;
-          }
-
           return {
             success: false,
             message: `${field.label || field.key} bharna lazmi hai.`,
@@ -212,12 +211,6 @@ export async function updateListingAction(
         };
       }
     }
-
-    // Merge existing details with updated custom fields so partial updates do not wipe out unsubmitted keys
-    const mergedDetails = {
-      ...existingDetails,
-      ...customFieldsData,
-    };
 
     // 5. Database Main Listing Update
     const [updatedListing] = await db
@@ -312,9 +305,13 @@ export async function updateListingAction(
       await db.delete(listingImages).where(eq(listingImages.listingId, id));
     }
 
-    revalidatePath("/admin/listings");
-    revalidatePath(`/admin/listings/${id}/edit`);
-    revalidatePath(`/listings/${finalUniqueSlug}`);
+    try {
+      revalidatePath("/admin/listings");
+      revalidatePath(`/admin/listings/${id}/edit`);
+      revalidatePath(`/listings/${finalUniqueSlug}`);
+    } catch {
+      // safe fallback outside Next.js request context
+    }
 
     return {
       success: true,

@@ -1,7 +1,6 @@
 import { db } from "@/db";
 import { categories } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { inArray } from "drizzle-orm";
+import { eq, isNull, asc, inArray } from "drizzle-orm";
 
 export interface GetCategoriesParams {
   search?: string;
@@ -215,5 +214,21 @@ export async function getAllCategoryFieldsMap() {
   } catch (error) {
     console.error("Failed to fetch all category fields map:", error);
     return {};
+  }
+}
+
+/**
+ * Root/Parent categories fetcher for dropdown filters and listings dashboard
+ */
+export async function getRootCategories() {
+  try {
+    return await db
+      .select({ id: categories.id, name: categories.name })
+      .from(categories)
+      .where(isNull(categories.parentId))
+      .orderBy(asc(categories.name));
+  } catch (error) {
+    console.error("GET_ROOT_CATEGORIES_ERROR:", error);
+    return [];
   }
 }

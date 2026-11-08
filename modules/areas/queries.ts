@@ -85,3 +85,18 @@ export async function getActiveAreas() {
     return { success: false, data: [] };
   }
 }
+
+/**
+ * 3. Dropdown list for filters
+ */
+export async function getAreasDropdown() {
+  try {
+    return await db
+      .select({ id: areas.id, name: areas.name })
+      .from(areas)
+      .orderBy(asc(areas.name));
+  } catch (error) {
+    console.error("GET_AREAS_DROPDOWN_ERROR:", error);
+    return [];
+  }
+}

@@ -22,6 +22,7 @@ import { listingFormSchema, type ListingFormValues } from "../../schema";
 import { createListingAction } from "../../actions/addlistingaction";
 import { updateListingAction } from "../../actions/updateistingaction";
 import { uploadListingImagesAction } from "../../actions/uploadListingImages";
+import { isFieldRequired, purgeHiddenFieldValues } from "@/modules/categories/utils";
 
 interface AddListingFormProps {
   areas?: any[];
@@ -301,6 +302,9 @@ export default function AddListingForm({
       ...parentFields.filter((pf: any) => !childKeys.has(pf.key)),
     ].filter((f: any) => f.isActive !== false);
 
+    // Purge hidden conditional field values so they are not kept, validated, or submitted
+    data.customFields = purgeHiddenFieldValues(activeFields, data.customFields || {});
+
     const isEditMode = Boolean(isEditing || initialData?.id);
     const initialDetails = (initialData?.details || {}) as Record<string, any>;
 
@@ -310,41 +314,31 @@ export default function AddListingForm({
       if (field.type === "boolean") continue;
 
       const fieldKey = field.key;
-      const val = data.customFields?.[fieldKey];
-      const isEmpty =
-        val === undefined ||
-        val === null ||
-        (Array.isArray(val) && val.length === 0) ||
-        (typeof val === "string" && val.trim() === "") ||
-        (field.type === "number" && (val === "" || isNaN(Number(val))));
+      const isRequired = isFieldRequired(
+        field,
+        data.customFields,
+        isEditMode,
+        initialDetails,
+      );
 
-      if (field.isRequired && isEmpty) {
-        if (isEditMode) {
-          // Check if field was originally filled in the listing
-          const wasPresentInOriginal =
-            fieldKey in initialDetails &&
-            initialDetails[fieldKey] !== undefined &&
-            initialDetails[fieldKey] !== null &&
-            (typeof initialDetails[fieldKey] === "string"
-              ? initialDetails[fieldKey].trim() !== ""
-              : true) &&
-            (Array.isArray(initialDetails[fieldKey])
-              ? initialDetails[fieldKey].length > 0
-              : true);
+      if (isRequired) {
+        const val = data.customFields?.[fieldKey];
+        const isEmpty =
+          val === undefined ||
+          val === null ||
+          (Array.isArray(val) && val.length === 0) ||
+          (typeof val === "string" && val.trim() === "") ||
+          (field.type === "number" && (val === "" || isNaN(Number(val))));
 
-          // Legacy listings: if newly introduced field was not in original details, NEVER block submission
-          if (!wasPresentInOriginal) {
-            continue;
+        if (isEmpty) {
+          setError(`customFields.${fieldKey}` as any, {
+            type: "manual",
+            message: `${field.label || fieldKey} bharna lazmi hai.`,
+          });
+
+          if (!firstMissingKey) {
+            firstMissingKey = fieldKey;
           }
-        }
-
-        setError(`customFields.${fieldKey}` as any, {
-          type: "manual",
-          message: `${field.label || fieldKey} bharna lazmi hai.`,
-        });
-
-        if (!firstMissingKey) {
-          firstMissingKey = fieldKey;
         }
       }
     }
@@ -419,7 +413,6 @@ export default function AddListingForm({
                 : "Listing kamyabi se create ho gayi!"),
           );
           router.push("/admin/listings");
-          router.refresh();
         } else {
           toast.error(
             res.message ||

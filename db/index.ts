@@ -22,6 +22,7 @@ declare global {
 const client =
   globalThis._postgresClient ??
   postgres(connectionString, {
+    prepare: false, // Required for Supabase transaction pooler (port 6543 / PgBouncer)
     max: 10,
     idle_timeout: 20,
     connect_timeout: 10,
