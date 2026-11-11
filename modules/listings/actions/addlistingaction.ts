@@ -4,7 +4,6 @@ import { db } from "@/db";
 import {
   listings,
   categories,
-  categoryFields,
   listingImages,
 } from "@/db/schema";
 import { listingFormSchema } from "../schema";
@@ -13,6 +12,7 @@ import { eq, or, like, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { createSlug } from "@/lib/utils";
 import { isFieldRequired, purgeHiddenFieldValues } from "@/modules/categories/utils";
+import { getFieldsForCategory } from "@/modules/categories/queries";
 
 // 🛠️ Helper function jo unique slug guarantee karta hai
 async function generateUniqueSlug(rawInput: string): Promise<string> {
@@ -87,46 +87,11 @@ export async function createListingAction(formData: ListingFormValues) {
       ? Number(data.subCategoryId)
       : parentCatId;
 
-    // 2. 🛡️ Dynamic Custom Fields DB Verification
-    const relevantCategoryIds: number[] = [parentCatId];
-    if (data.subCategoryId && data.subCategoryId.trim() !== "") {
-      relevantCategoryIds.push(Number(data.subCategoryId));
-    }
+    // 2. 🛡️ Dynamic Custom Fields DB Verification via Bridge Table & Inheritance
+    const deduplicatedFields = await getFieldsForCategory(targetCategoryId, {
+      includeInherited: true,
+    });
 
-    const dbCategoryFields = await db
-      .select()
-      .from(categoryFields)
-      .where(
-        and(
-          eq(categoryFields.isActive, true),
-          inArray(categoryFields.categoryId, relevantCategoryIds),
-        ),
-      );
-
-    // Deduplicate fields by key: subcategory definition takes precedence over parent category
-    const subCatId =
-      data.subCategoryId && data.subCategoryId.trim() !== ""
-        ? Number(data.subCategoryId)
-        : null;
-    const fieldsMap = new Map<string, typeof categoryFields.$inferSelect>();
-
-    // Process parent category fields first
-    for (const field of dbCategoryFields) {
-      if (field.categoryId === parentCatId) {
-        fieldsMap.set(field.key, field);
-      }
-    }
-
-    // Overwrite with subcategory fields (child takes precedence)
-    if (subCatId) {
-      for (const field of dbCategoryFields) {
-        if (field.categoryId === subCatId) {
-          fieldsMap.set(field.key, field);
-        }
-      }
-    }
-
-    const deduplicatedFields = Array.from(fieldsMap.values());
     const rawCustomFieldsData = (data.customFields || {}) as Record<string, any>;
     // Purge hidden fields so they are never saved or validated on the server
     const customFieldsData = purgeHiddenFieldValues(deduplicatedFields, rawCustomFieldsData);

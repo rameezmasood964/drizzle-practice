@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import { and, ne, eq, like, notInArray, or } from "drizzle-orm";
 
 import { db } from "@/db";
-import { listings, listingImages, categories, categoryFields } from "@/db/schema";
+import { listings, listingImages, categories } from "@/db/schema";
 import { listingFormSchema } from "../schema";
 import type { ListingFormValues } from "../types";
 import { createSlug } from "@/lib/utils";
 import { isFieldRequired, purgeHiddenFieldValues } from "@/modules/categories/utils";
+import { getFieldsForCategory } from "@/modules/categories/queries";
 
 // Update ke waqt collision check (apni current listing ko chhor kar check karega)
 async function generateUniqueSlugForUpdate(
@@ -116,27 +117,10 @@ export async function updateListingAction(
       finalCategoryId = existingListing.categoryId;
     }
 
-    // 2. 🛡️ Dynamic Custom Fields DB Verification
-    const relevantCategoryIds = isExistingRoot
-      ? finalCategoryId !== existingListing.categoryId
-        ? [existingListing.categoryId, finalCategoryId]
-        : [existingListing.categoryId]
-      : [existingListing.categoryParentId!, existingListing.categoryId];
-
-    const dbCategoryFields = await db
-      .select()
-      .from(categoryFields)
-      .where(
-        and(
-          eq(categoryFields.isActive, true),
-          relevantCategoryIds.length === 1
-            ? eq(categoryFields.categoryId, relevantCategoryIds[0])
-            : or(
-                eq(categoryFields.categoryId, relevantCategoryIds[0]),
-                eq(categoryFields.categoryId, relevantCategoryIds[1]),
-              ),
-        ),
-      );
+    // 2. 🛡️ Dynamic Custom Fields DB Verification via Bridge Table & Inheritance
+    const dbCategoryFields = await getFieldsForCategory(finalCategoryId, {
+      includeInherited: true,
+    });
 
     const existingDetails = (existingListing.details || {}) as Record<
       string,

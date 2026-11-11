@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Eye, HelpCircle } from "lucide-react";
+import { Eye } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -17,15 +17,19 @@ import { Switch } from "@/components/ui/switch";
 import {
   createCategoriesField,
   updateCategoryFields,
+  getAssignedCategoryIdsAction,
+  getCategoriesHierarchyAction,
 } from "../../actions/fields";
-import { CategoryFieldItem } from "../../types";
+import type { CategoryFieldItem, CategoryTreeItem } from "../../types";
 import { canFieldDependOn } from "../../utils";
+import CategoryAssignmentSelector from "./CategoryAssignmentSelector";
 
 interface AddCategoryFieldFormProps {
   categoryId: string | number;
   onSuccess: () => void;
   initialData?: any;
   allFields?: CategoryFieldItem[];
+  categoriesHierarchy?: CategoryTreeItem[];
 }
 
 const AddCategoryFieldForm = ({
@@ -33,8 +37,9 @@ const AddCategoryFieldForm = ({
   onSuccess,
   initialData,
   allFields = [],
+  categoriesHierarchy = [],
 }: AddCategoryFieldFormProps) => {
-  // all states (pre-filled with initialData if editing)
+  // Field Basic States
   const [fieldType, setFieldType] = useState(initialData?.type || "text");
   const [label, setLabel] = useState(initialData?.label || "");
   const [key, setKey] = useState(initialData?.key || "");
@@ -51,6 +56,24 @@ const AddCategoryFieldForm = ({
   const [isFilterable, setIsFilterable] = useState(
     Boolean(initialData?.isFilterable),
   );
+
+  // Category Assignment States
+  const [treeCategories, setTreeCategories] = useState<CategoryTreeItem[]>(
+    categoriesHierarchy || [],
+  );
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>(
+    () => {
+      if (initialData?.assignedCategoryIds) {
+        return initialData.assignedCategoryIds;
+      }
+      if (initialData?.categoryId) {
+        return [Number(initialData.categoryId)];
+      }
+      return [Number(categoryId)];
+    },
+  );
+  const [categoryError, setCategoryError] = useState("");
+  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
 
   // Conditional Visibility States
   const [isConditional, setIsConditional] = useState(
@@ -74,15 +97,56 @@ const AddCategoryFieldForm = ({
 
   const isEditMode = Boolean(initialData);
 
+  // Load category hierarchy if not provided via props
+  useEffect(() => {
+    if (!categoriesHierarchy || categoriesHierarchy.length === 0) {
+      getCategoriesHierarchyAction().then((tree) => {
+        if (tree && tree.length > 0) {
+          setTreeCategories(tree);
+        }
+      });
+    } else {
+      setTreeCategories(categoriesHierarchy);
+    }
+  }, [categoriesHierarchy]);
+
+  // Load assigned category IDs when editing an existing field
+  useEffect(() => {
+    if (isEditMode && initialData?.id) {
+      let isMounted = true;
+      setIsLoadingAssignments(true);
+
+      getAssignedCategoryIdsAction(Number(initialData.id))
+        .then((assignedIds) => {
+          if (isMounted && assignedIds && assignedIds.length > 0) {
+            setSelectedCategoryIds(assignedIds);
+          }
+        })
+        .catch((err) => {
+          console.error("Error loading assigned category IDs:", err);
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingAssignments(false);
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    } else {
+      // In create mode: default to current category
+      setSelectedCategoryIds([Number(categoryId)]);
+    }
+  }, [isEditMode, initialData?.id, categoryId]);
+
   const generateKey = (text: string) => {
     return text
       .toLowerCase()
       .trim()
-      .replace(/\s+/g, "_") // har space ki jagah '_' lagaye
-      .replace(/[^a-z0-9_]/g, ""); // special symbols jaise '(', ')', '.', '@' ko hata de
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "");
   };
 
-  // 1. Compatible controlling fields (no self-dependency, no cycles)
+  // Compatible controlling fields (no self-dependency, no cycles)
   const availableControllingFields = useMemo(() => {
     if (!allFields || allFields.length === 0) return [];
     const currentKey = (key || initialData?.key || "").trim().toLowerCase();
@@ -92,17 +156,16 @@ const AddCategoryFieldForm = ({
       if (f.isActive === false) return false;
       if (currentId && f.id === currentId) return false;
       if (f.key.trim().toLowerCase() === currentKey) return false;
-      // Prevent circular dependency
       return canFieldDependOn(currentKey, f.key, allFields);
     });
   }, [allFields, key, initialData]);
 
-  // 2. Selected controlling field
+  // Selected controlling field
   const selectedControllingField = useMemo(() => {
     return availableControllingFields.find((f) => f.key === dependsOnFieldKey);
   }, [availableControllingFields, dependsOnFieldKey]);
 
-  // 3. Predefined options for value selection if controlling field is select/multiselect/boolean
+  // Predefined options for value selection if controlling field is select/multiselect/boolean
   const conditionValueOptions = useMemo(() => {
     if (!selectedControllingField) return [];
     if (selectedControllingField.type === "boolean") {
@@ -125,23 +188,37 @@ const AddCategoryFieldForm = ({
     return [];
   }, [selectedControllingField]);
 
-  // handle submitfunction
+  // Handle Form Submit
   const handleSubmit = async () => {
+    // 1. Validate Category Selection
+    if (selectedCategoryIds.length === 0) {
+      setCategoryError("Kam az kam 1 category select karna lazmi hai.");
+      toast.error("Kam az kam 1 category select karein.");
+      return;
+    }
+    setCategoryError("");
+
+    // 2. Validate Options for select/multiselect
     const isOptionField = fieldType === "select" || fieldType === "multiselect";
     const optionsArray = isOptionField
       ? options
-        .split(",")
-        .map((item: any) => item.trim())
-        .filter(Boolean)
+          .split(",")
+          .map((item: any) => item.trim())
+          .filter(Boolean)
       : null;
 
     if (isOptionField && (!optionsArray || optionsArray.length === 0)) {
-      setOptionsError("Kam az kam 1 option enter karna lazmi hai (comma-separated).");
-      toast.error("Dropdown options enter karein (kam az kam 1 option lazmi hai)");
+      setOptionsError(
+        "Kam az kam 1 option enter karna lazmi hai (comma-separated).",
+      );
+      toast.error(
+        "Dropdown options enter karein (kam az kam 1 option lazmi hai)",
+      );
       return;
     }
     setOptionsError("");
 
+    // 3. Validate Conditional Logic
     if (isConditional) {
       if (!dependsOnFieldKey || dependsOnFieldKey.trim() === "") {
         toast.error("Controlling field select karein (Show If).");
@@ -171,8 +248,9 @@ const AddCategoryFieldForm = ({
       };
 
       if (isEditMode) {
-        // --- 1. EDIT MODE: Sirf editable fields ka payload ---
+        // EDIT MODE: Update field metadata and synchronize assigned category IDs
         const updatePayload = {
+          categoryIds: selectedCategoryIds,
           label: label.trim(),
           options: optionsArray,
           placeholder: placeholder.trim() || null,
@@ -188,8 +266,10 @@ const AddCategoryFieldForm = ({
           updatePayload,
         );
       } else {
+        // CREATE MODE: Insert field and category_field_assignments
         const createPayload = {
           categoryId: Number(categoryId),
+          categoryIds: selectedCategoryIds,
           label: label.trim(),
           key: key.trim(),
           type: fieldType as any,
@@ -204,13 +284,12 @@ const AddCategoryFieldForm = ({
         response = await createCategoriesField(createPayload);
       }
 
-      console.log("category field ka server action pr response", response);
       if (response.success) {
         toast.success(
           response.message ||
-          (isEditMode
-            ? "Field updated successfully!"
-            : "Custom field added successfully!"),
+            (isEditMode
+              ? "Field updated successfully!"
+              : "Custom field added successfully!"),
         );
         onSuccess();
       } else {
@@ -241,7 +320,6 @@ const AddCategoryFieldForm = ({
               if (!isEditMode) {
                 setKey(generateKey(val));
               }
-              // 👈 Yahan key auto-generate ho rahi hai
             }}
           />
         </div>
@@ -288,12 +366,17 @@ const AddCategoryFieldForm = ({
         {(fieldType === "select" || fieldType === "multiselect") && (
           <div className="space-y-1.5">
             <Label htmlFor="options" className="flex items-center gap-1">
-              Dropdown Options (Comma Separated) <span className="text-destructive">*</span>
+              Dropdown Options (Comma Separated){" "}
+              <span className="text-destructive">*</span>
             </Label>
             <Input
               id="options"
               placeholder="e.g. Option 1, Option 2, Option 3"
-              className={optionsError ? "border-destructive focus-visible:ring-destructive" : ""}
+              className={
+                optionsError
+                  ? "border-destructive focus-visible:ring-destructive"
+                  : ""
+              }
               value={options}
               onChange={(e) => {
                 setOptions(e.target.value);
@@ -341,13 +424,29 @@ const AddCategoryFieldForm = ({
           </p>
         </div>
 
+        {/* Category Assignment Multi-Select Interface */}
+        <CategoryAssignmentSelector
+          categories={treeCategories}
+          selectedCategoryIds={selectedCategoryIds}
+          onChange={(ids) => {
+            setSelectedCategoryIds(ids);
+            if (categoryError && ids.length > 0) {
+              setCategoryError("");
+            }
+          }}
+          error={categoryError}
+          disabled={isLoading || isLoadingAssignments}
+        />
+
         {/* Conditional Visibility Section */}
         <div className="pt-3 border-t space-y-3">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <div className="flex items-center gap-1.5">
                 <Eye className="h-4 w-4 text-primary" />
-                <Label className="text-sm font-semibold">Enable Conditional Visibility</Label>
+                <Label className="text-sm font-semibold">
+                  Enable Conditional Visibility
+                </Label>
               </div>
               <p className="text-[11px] text-muted-foreground">
                 Show or hide this field based on another field&apos;s answer.
@@ -358,7 +457,6 @@ const AddCategoryFieldForm = ({
               onCheckedChange={(checked) => {
                 setIsConditional(checked);
                 if (checked) {
-                  // When Conditional Visibility is enabled, automatically set isRequired = false
                   setIsRequired(false);
                 } else {
                   setDependsOnFieldKey("");
@@ -373,14 +471,18 @@ const AddCategoryFieldForm = ({
             <div className="rounded-lg border border-border bg-muted/30 p-3.5 space-y-3.5">
               {availableControllingFields.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">
-                  No other active fields available in this category or parent category to depend on.
+                  No other active fields available in this category or parent
+                  category to depend on.
                 </p>
               ) : (
                 <>
-                  {/* 1. Show If (Controlling Field) */}
+                  {/* Show If (Controlling Field) */}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium flex items-center justify-between">
-                      <span>Show If (Controlling Field) <span className="text-destructive">*</span></span>
+                      <span>
+                        Show If (Controlling Field){" "}
+                        <span className="text-destructive">*</span>
+                      </span>
                       {selectedControllingField && (
                         <span className="text-[10px] text-muted-foreground uppercase font-mono">
                           {selectedControllingField.type}
@@ -391,11 +493,16 @@ const AddCategoryFieldForm = ({
                       value={dependsOnFieldKey}
                       onValueChange={(val) => {
                         setDependsOnFieldKey(val);
-                        // Reset condition value when changing controlling field
-                        const target = availableControllingFields.find((f) => f.key === val);
+                        const target = availableControllingFields.find(
+                          (f) => f.key === val,
+                        );
                         if (target?.type === "boolean") {
                           setConditionValue("Yes");
-                        } else if (target?.options && Array.isArray(target.options) && target.options.length > 0) {
+                        } else if (
+                          target?.options &&
+                          Array.isArray(target.options) &&
+                          target.options.length > 0
+                        ) {
                           setConditionValue(target.options[0]);
                         } else {
                           setConditionValue("");
@@ -407,7 +514,11 @@ const AddCategoryFieldForm = ({
                       </SelectTrigger>
                       <SelectContent>
                         {availableControllingFields.map((f) => (
-                          <SelectItem key={f.key} value={f.key} className="text-xs">
+                          <SelectItem
+                            key={f.key}
+                            value={f.key}
+                            className="text-xs"
+                          >
                             {f.label} ({f.key})
                           </SelectItem>
                         ))}
@@ -415,10 +526,13 @@ const AddCategoryFieldForm = ({
                     </Select>
                   </div>
 
-                  {/* 2. Condition & 3. Value */}
+                  {/* Condition & Value */}
                   <div
-                    className={`grid grid-cols-1 ${conditionOperator === "is_not_empty" ? "" : "sm:grid-cols-2"
-                      } gap-3`}
+                    className={`grid grid-cols-1 ${
+                      conditionOperator === "is_not_empty"
+                        ? ""
+                        : "sm:grid-cols-2"
+                    } gap-3`}
                   >
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium">Condition</Label>
@@ -483,10 +597,12 @@ const AddCategoryFieldForm = ({
                     )}
                   </div>
 
-                  {/* 4. Required If Visible */}
+                  {/* Required If Visible */}
                   <div className="pt-2 border-t border-border/60 flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label className="text-xs font-medium">Required If Visible</Label>
+                      <Label className="text-xs font-medium">
+                        Required If Visible
+                      </Label>
                       <p className="text-[10px] text-muted-foreground">
                         Make this field mandatory only when it becomes visible.
                       </p>
@@ -547,7 +663,7 @@ const AddCategoryFieldForm = ({
         <Button
           type="button"
           onClick={handleSubmit}
-          disabled={isLoading}
+          disabled={isLoading || isLoadingAssignments}
           className="cursor-pointer"
         >
           {isLoading ? "Saving..." : isEditMode ? "Update Field" : "Save Field"}

@@ -50,7 +50,7 @@ export type CategoryFieldType =
 // Database category_fields table ka single record
 export interface CategoryFieldItem {
   id: number;
-  categoryId: number;
+  categoryId?: number | null;
   key: string;
   label: string;
   type: CategoryFieldType;
@@ -65,6 +65,23 @@ export interface CategoryFieldItem {
   conditionOperator?: "equals" | "not_equals" | "is_not_empty" | "contains" | string | null;
   conditionValue?: string | null;
   requiredIfVisible?: boolean;
+  isInherited?: boolean;
+}
+
+// Category hierarchy for multi-category assignment builder
+export interface CategoryTreeSubItem {
+  id: number;
+  name: string;
+  slug?: string;
+  parentId?: number;
+}
+
+export interface CategoryTreeItem {
+  id: number;
+  name: string;
+  slug?: string;
+  parentId?: number | null;
+  subCategories?: CategoryTreeSubItem[];
 }
 
 // CategoryFields UI component ke props
@@ -72,4 +89,5 @@ export interface CategoryFieldsProps {
   categoryName?: string;
   categoryId: string | number;
   initialFields?: CategoryFieldItem[];
+  categoriesHierarchy?: CategoryTreeItem[];
 }

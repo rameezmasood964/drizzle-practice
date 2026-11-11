@@ -23,8 +23,10 @@ import {
   areas,
   categories,
   categoryFields,
+  categoryFieldAssignments,
+  type CategoryField,
 } from "../db/schema/index";
-import { eq, like, and, inArray } from "drizzle-orm";
+import { eq, like, and, inArray, asc } from "drizzle-orm";
 import {
   isFieldVisible,
   isFieldRequired,
@@ -298,7 +300,36 @@ Flags:
   }
 
   const activeCatIds = activeCats.map((c) => c.id);
-  const dbFields =
+  // Fetch dynamic fields mapped through categoryFieldAssignments bridge table
+  const assignmentRows =
+    activeCatIds.length > 0
+      ? await db
+          .select({
+            categoryId: categoryFieldAssignments.categoryId,
+            field: categoryFields,
+          })
+          .from(categoryFieldAssignments)
+          .innerJoin(
+            categoryFields,
+            and(
+              eq(categoryFieldAssignments.fieldId, categoryFields.id),
+              eq(categoryFields.isActive, true),
+            ),
+          )
+          .where(inArray(categoryFieldAssignments.categoryId, activeCatIds))
+          .orderBy(asc(categoryFields.sortOrder))
+      : [];
+
+  const fieldsByCatId = new Map<number, CategoryField[]>();
+  for (const row of assignmentRows) {
+    if (!fieldsByCatId.has(row.categoryId)) {
+      fieldsByCatId.set(row.categoryId, []);
+    }
+    fieldsByCatId.get(row.categoryId)!.push(row.field);
+  }
+
+  // Legacy fallback: also check if any active fields have direct categoryId not yet in junction table
+  const legacyFields =
     activeCatIds.length > 0
       ? await db
           .select()
@@ -309,17 +340,32 @@ Flags:
               inArray(categoryFields.categoryId, activeCatIds),
             ),
           )
+          .orderBy(asc(categoryFields.sortOrder))
       : [];
 
-  const fieldsByCatId = new Map<number, typeof dbFields>();
-  for (const f of dbFields) {
-    if (!fieldsByCatId.has(f.categoryId)) fieldsByCatId.set(f.categoryId, []);
-    fieldsByCatId.get(f.categoryId)!.push(f);
+  for (const f of legacyFields) {
+    if (f.categoryId !== null && f.categoryId !== undefined) {
+      if (!fieldsByCatId.has(f.categoryId)) {
+        fieldsByCatId.set(f.categoryId, []);
+      }
+      const existing = fieldsByCatId.get(f.categoryId)!;
+      if (!existing.some((existingField) => existingField.id === f.id)) {
+        existing.push(f);
+      }
+    }
   }
+
+  const allLoadedFields = Array.from(
+    new Map(
+      Array.from(fieldsByCatId.values())
+        .flat()
+        .map((f) => [f.id, f]),
+    ).values(),
+  );
 
   console.log(`  • Active Areas      : ${activeAreasMap.size}`);
   console.log(`  • Active Categories : ${activeCats.length}`);
-  console.log(`  • Active Fields     : ${dbFields.length}\n`);
+  console.log(`  • Active Fields     : ${allLoadedFields.length}\n`);
 
   // ── 2. Duplicate Detection Prep (Database slug & title + within-batch)
   const existingListings = await db
@@ -527,7 +573,7 @@ Flags:
           : [];
 
       // Child category field overrides parent field if key matches
-      const fieldMap = new Map<string, (typeof dbFields)[0]>();
+      const fieldMap = new Map<string, CategoryField>();
       for (const f of parentFields) fieldMap.set(f.key, f);
       for (const f of childFields) fieldMap.set(f.key, f);
 

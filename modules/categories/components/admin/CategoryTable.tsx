@@ -397,7 +397,7 @@ const CategoryTable = ({
                           {/* Manage Fields Action */}
                           <DropdownMenuItem asChild>
                             <Link
-                              href={`/admin/categories/${cat.id}/fields`}
+                              href={`/admin/categories/${originalCategory?.slug || cat.id}/fields`}
                               className="flex items-center gap-2 cursor-pointer"
                             >
                               <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />

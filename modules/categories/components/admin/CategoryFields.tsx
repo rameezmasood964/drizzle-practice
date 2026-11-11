@@ -39,6 +39,7 @@ export default function CategoryFields({
   categoryName,
   categoryId,
   initialFields = [],
+  categoriesHierarchy = [],
 }: CategoryFieldsProps) {
   // all states
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -146,6 +147,7 @@ export default function CategoryFields({
               categoryId={categoryId}
               initialData={fieldToEdit}
               allFields={fields}
+              categoriesHierarchy={categoriesHierarchy}
               onSuccess={() => {
                 setIsAddOpen(false);
                 setFieldToEdit(null);
@@ -186,7 +188,7 @@ export default function CategoryFields({
                 </TableRow>
               ) : (
                 fields.map((f) => {
-                  const isInherited = f.categoryId !== Number(categoryId);
+                  const isInherited = Boolean(f.isInherited);
 
                   return (
                     <TableRow

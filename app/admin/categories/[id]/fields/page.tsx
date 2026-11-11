@@ -1,30 +1,34 @@
 import CategoryFields from "@/modules/categories/components/admin/CategoryFields";
-import { getCategoryById } from "@/modules/categories/queries";
-import { getCategoryFields } from "@/modules/categories/queries";
-import { getCategoryFieldsWithInheritance } from "@/modules/categories/queries";
+import {
+  getCategoryByIdOrSlug,
+  getCategoryFieldsWithInheritance,
+  getCategoriesHierarchy,
+} from "@/modules/categories/queries";
 import { notFound } from "next/navigation";
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
 const Page = async ({ params }: PageProps) => {
-  // 1. URL se id nikal kar integer banayein
+  // 1. URL se identifier (slug ya ID) nikal kar category resolve karein
   const { id } = await params;
-  const categoryId = parseInt(id, 10);
-
-  // Agar ID number nahi hai to 404 show karein
-  if (isNaN(categoryId)) {
+  if (!id) {
     notFound();
   }
 
-  // 2. Database se is category ka record le kar aayein
-  const category = await getCategoryById(categoryId);
-  const categoryField = await getCategoryFieldsWithInheritance(categoryId);
+  const category = await getCategoryByIdOrSlug(id);
 
-  // Agar category exist nahi karti to 404
+  // Agar category exist nahi karti to 404 show karein
   if (!category) {
     notFound();
   }
+
+  // 2. Database se is category ke fields aur full hierarchy le kar aayein
+  const [categoryField, categoriesHierarchy] = await Promise.all([
+    getCategoryFieldsWithInheritance(category.id),
+    getCategoriesHierarchy(),
+  ]);
 
   return (
     <div className="p-6">
@@ -32,6 +36,7 @@ const Page = async ({ params }: PageProps) => {
         categoryId={category.id}
         categoryName={category.name}
         initialFields={categoryField}
+        categoriesHierarchy={categoriesHierarchy}
       />
     </div>
   );
